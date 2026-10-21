@@ -333,10 +333,10 @@ private fun XiaozhiScreen(
         topBar = {
             if (currentScreen == AppScreen.SETTINGS) {
                 TopAppBar(
-                    title = { Text("配置中心", fontWeight = FontWeight.SemiBold) },
+                    title = { Text("Pusat Pengaturan", fontWeight = FontWeight.SemiBold) },
                     navigationIcon = {
                         IconButton(onClick = onBackToChat) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "返回聊天")
+                            Icon(Icons.Default.ArrowBack, contentDescription = "Kembali ke Chat")
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
@@ -490,178 +490,98 @@ private fun SettingsScreen(
     ) {
         SettingsSummaryCard(state = state)
 
-        SectionTitle("官方接入")
+        SectionTitle("Koneksi Resmi")
         SettingsCard {
             SettingsField(
                 icon = "🌐",
-                title = "OTA 地址",
-                subtitle = "官方配置入口",
+                title = "Alamat OTA",
+                subtitle = "Pintu konfigurasi resmi",
                 value = state.otaUrl,
                 onValueChange = onOtaUrlChanged,
             )
             HorizontalDivider()
             SettingsField(
                 icon = "🧩",
-                title = "设备 ID",
-                subtitle = "握手头里的 Device-Id",
+                title = "ID Perangkat",
+                subtitle = "Device-Id di header handshake",
                 value = state.deviceId,
                 onValueChange = onDeviceIdChanged,
             )
             HorizontalDivider()
             SettingsField(
                 icon = "🆔",
-                title = "客户端 ID",
-                subtitle = "握手头里的 Client-Id",
+                title = "ID Klien",
+                subtitle = "Client-Id di header handshake",
                 value = state.clientId,
                 onValueChange = onClientIdChanged,
             )
             HorizontalDivider()
             SettingsField(
                 icon = "🔗",
-                title = "WebSocket 地址",
-                subtitle = "官方实时会话地址",
+                title = "Alamat WebSocket",
+                subtitle = "Alamat sesi real-time resmi",
                 value = state.websocketUrl,
                 onValueChange = onWebsocketUrlChanged,
             )
             HorizontalDivider()
             SettingsField(
                 icon = "🔐",
-                title = "授权 Token",
-                subtitle = "OTA 返回的 Bearer Token",
+                title = "Token Otorisasi",
+                subtitle = "Bearer Token dari OTA",
                 value = state.authToken,
                 onValueChange = onTokenChanged,
             )
             HorizontalDivider()
             SettingsField(
                 icon = "🧾",
-                title = "协议版本",
-                subtitle = "官方 WebSocket 二进制协议版本",
+                title = "Versi Protokol",
+                subtitle = "Versi protokol biner WebSocket",
                 value = state.protocolVersion,
                 onValueChange = onProtocolVersionChanged,
                 keyboardType = KeyboardType.Number,
             )
             HorizontalDivider()
             SettingsActionRow(
-                primaryLabel = "获取配置",
+                primaryLabel = "Ambil Konfigurasi",
                 onPrimaryClick = onFetchOfficialConfig,
-                secondaryLabel = if (state.activationPending) "激活后重试" else "连接",
+                secondaryLabel = if (state.activationPending) "Coba Lagi Setelah Aktivasi" else "Sambung",
                 onSecondaryClick = if (state.activationPending) onRetryActivation else onConnect,
-                tertiaryLabel = if (state.activationPending) null else "断开",
+                tertiaryLabel = if (state.activationPending) null else "Putus",
                 onTertiaryClick = if (state.activationPending) null else onDisconnect,
             )
         }
 
-        SectionTitle("语音体验")
+        SectionTitle("Pengalaman Suara")
         SettingsCard {
             SettingsSwitch(
                 icon = "🎙️",
-                title = "语音唤醒",
-                subtitle = state.wakeWordStatus.ifBlank { "未开启" },
+                title = "Bangun Suara",
+                subtitle = state.wakeWordStatus.ifBlank { "Nonaktif" },
                 checked = state.wakeWordEnabled,
                 onCheckedChange = onWakeWordEnabledChanged,
             )
             HorizontalDivider()
             SettingsField(
                 icon = "🗣️",
-                title = "唤醒词",
-                subtitle = "多个唤醒词用英文逗号分隔",
+                title = "Kata Kunci",
+                subtitle = "Pisahkan beberapa kata kunci dengan koma",
                 value = state.wakeWords,
                 onValueChange = onWakeWordsChanged,
             )
             HorizontalDivider()
             SettingsStatus(
                 icon = "🔊",
-                title = "当前音频路由",
+                title = "Rute Audio Saat Ini",
                 subtitle = state.audioRouteStatus,
             )
             HorizontalDivider()
             SettingsStatus(
                 icon = "📡",
-                title = "连接状态",
-                subtitle = state.connectionStatus.toChineseText(),
+                title = "Status Koneksi",
+                subtitle = state.connectionStatus.toIndonesianText(),
             )
         }
 
-        SectionTitle("本地扩展")
-        SettingsCard {
-            SettingsSwitch(
-                icon = "🧰",
-                title = "Python / MCP 运行入口",
-                subtitle = state.pythonRuntimeStatus.ifBlank { "未启用" },
-                checked = state.termuxEnabled,
-                onCheckedChange = onTermuxEnabledChanged,
-            )
-            if (state.termuxEnabled) {
-                HorizontalDivider()
-                SettingsField(
-                    icon = "🐍",
-                    title = "Python 可执行文件",
-                    subtitle = "推荐使用 Termux 里的 Python",
-                    value = state.pythonPath,
-                    onValueChange = onPythonPathChanged,
-                )
-                HorizontalDivider()
-                SettingsField(
-                    icon = "📄",
-                    title = "Python 脚本",
-                    subtitle = "要启动的本地 MCP Python 文件",
-                    value = state.pythonScriptPath,
-                    onValueChange = onPythonScriptPathChanged,
-                )
-                HorizontalDivider()
-                SettingsField(
-                    icon = "📁",
-                    title = "工作目录",
-                    subtitle = "可留空，默认由 Termux 决定",
-                    value = state.pythonWorkdir,
-                    onValueChange = onPythonWorkdirChanged,
-                )
-                HorizontalDivider()
-                SettingsAction(
-                    icon = "▶️",
-                    title = "启动本地 Python",
-                    subtitle = "通过 Termux 拉起脚本，用于本地 MCP 服务",
-                    actionLabel = "运行",
-                    onClick = onRunPythonScript,
-                )
-                HorizontalDivider()
-                SettingsField(
-                    icon = "📲",
-                    title = "Termux API 命令",
-                    subtitle = state.termuxApiStatus.ifBlank { "未启用" },
-                    value = state.termuxApiCommand,
-                    onValueChange = onTermuxApiCommandChanged,
-                )
-                HorizontalDivider()
-                SettingsField(
-                    icon = "⌨️",
-                    title = "Termux API 参数",
-                    subtitle = "空格分隔，支持引号",
-                    value = state.termuxApiArguments,
-                    onValueChange = onTermuxApiArgumentsChanged,
-                )
-                HorizontalDivider()
-                SettingsAction(
-                    icon = "⚙️",
-                    title = "执行 termux-api",
-                    subtitle = "例如 termux-battery-status 或 termux-toast",
-                    actionLabel = "执行",
-                    onClick = onRunTermuxApiCommand,
-                )
-            }
-        }
-
-        SectionTitle("开发者工具")
-        DeveloperToolsCard(
-            expanded = developerExpanded,
-            onToggle = { developerExpanded = !developerExpanded },
-            state = state,
-            onDebugLoggingEnabledChanged = onDebugLoggingEnabledChanged,
-            onDebugWavDumpEnabledChanged = onDebugWavDumpEnabledChanged,
-            onMcpPayloadChanged = onMcpPayloadChanged,
-            onSendMcp = onSendMcp,
-            onClearLogs = onClearLogs,
-        )
     }
 }
 
@@ -672,9 +592,9 @@ private fun ChatHeaderCard(
     onPickAssistantAvatar: () -> Unit,
 ) {
     val headline = when {
-        state.isAssistantSpeaking -> "说话中"
-        state.isRecording -> "聆听中"
-        else -> "空闲"
+        state.isAssistantSpeaking -> "Berbicara"
+        state.isRecording -> "Mendengarkan"
+        else -> "Siaga"
     }
 
     Surface(
@@ -705,7 +625,7 @@ private fun ChatHeaderCard(
                     )
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
-                            text = "小智 AI",
+                            text = "XiaoZhi AI",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                         )
@@ -717,7 +637,7 @@ private fun ChatHeaderCard(
                     }
                 }
                 FilledTonalIconButton(onClick = onOpenSettings) {
-                    Icon(Icons.Default.Settings, contentDescription = "设置")
+                    Icon(Icons.Default.Settings, contentDescription = "Pengaturan")
                 }
             }
         }
@@ -745,8 +665,8 @@ private fun ComposerCard(
         ) {
             if (state.isRecording || state.isAssistantSpeaking || state.lastSttText.isNotBlank()) {
                 val hint = when {
-                    state.isRecording -> "正在收音，松开或点停止结束"
-                    state.isAssistantSpeaking -> "正在播报回复"
+                    state.isRecording -> "Merekam, lepas atau tekan berhenti"
+                    state.isAssistantSpeaking -> "Memutar jawaban"
                     state.lastSttText.isNotBlank() -> state.lastSttText
                     else -> ""
                 }
@@ -771,14 +691,14 @@ private fun ComposerCard(
                 ) {
                     Icon(
                         imageVector = if (state.isRecording) Icons.Default.Stop else Icons.Default.Mic,
-                        contentDescription = if (state.isRecording) "停止录音" else "语音输入",
+                        contentDescription = if (state.isRecording) "Berhenti Merekam" else "Input Suara",
                     )
                 }
                 OutlinedTextField(
                     value = state.draftMessage,
                     onValueChange = onDraftChanged,
                     modifier = Modifier.weight(1f),
-                    placeholder = { Text("输入消息") },
+                    placeholder = { Text("Ketik pesan") },
                     singleLine = true,
                     shape = RoundedCornerShape(24.dp),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
@@ -788,7 +708,7 @@ private fun ComposerCard(
                     onClick = onSendDraft,
                     enabled = state.draftMessage.isNotBlank(),
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "发送")
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Kirim")
                 }
             }
         }
@@ -807,7 +727,7 @@ private fun ChatMessageList(
             ChatMessage(
                 id = -1,
                 role = ChatRole.ASSISTANT,
-                text = "你好，我在。你可以直接对我说话，也可以打字。",
+                text = "Halo, saya di sini. Bicara atau ketik saja.",
                 timestamp = "",
             ),
         )
@@ -936,14 +856,14 @@ private fun AssistantAvatar(
         if (avatarPath.isNotBlank() && File(avatarPath).exists()) {
             AsyncImage(
                 model = File(avatarPath),
-                contentDescription = "小智头像",
+                contentDescription = "Avatar XiaoZhi",
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
         } else {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                 Text(
-                    text = "智",
+                    text = "Z",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -969,17 +889,17 @@ private fun ActivationBanner(
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Text(
-                text = "设备尚未激活",
+                text = "Perangkat belum diaktivasi",
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onTertiaryContainer,
             )
             Text(
-                text = "请前往 xiaozhi.me 控制台完成激活。",
+                text = "Buka konsol xiaozhi.me untuk aktivasi.",
                 color = MaterialTheme.colorScheme.onTertiaryContainer,
             )
             if (activationCode.isNotBlank()) {
                 Text(
-                    text = "激活码：$activationCode",
+                    text = "Kode aktivasi: $activationCode",
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onTertiaryContainer,
                 )
@@ -1008,7 +928,7 @@ private fun SettingsSummaryCard(state: UiState) {
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Text(
-                text = "当前会话",
+                text = "Sesi Saat Ini",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
@@ -1016,22 +936,22 @@ private fun SettingsSummaryCard(state: UiState) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                StatusPill(text = state.connectionStatus.toChineseText(), status = state.connectionStatus)
+                StatusPill(text = state.connectionStatus.toIndonesianText(), status = state.connectionStatus)
                 if (state.sessionId.isNotBlank()) {
                     StatusTag(text = "Session ${state.sessionId.take(8)}")
                 }
             }
             TwoColumnInfo(
-                leftTitle = "服务器采样率",
-                leftValue = state.serverSampleRate.ifBlank { "未建立" },
-                rightTitle = "帧时长",
+                leftTitle = "Sample Rate Server",
+                leftValue = state.serverSampleRate.ifBlank { "Belum Tersambung" },
+                rightTitle = "Durasi Frame",
                 rightValue = state.serverFrameDuration.ifBlank { "--" },
             )
             TwoColumnInfo(
-                leftTitle = "音频路由",
+                leftTitle = "Rute Audio",
                 leftValue = state.audioRouteStatus,
-                rightTitle = "唤醒状态",
-                rightValue = state.wakeWordStatus.ifBlank { "未开启" },
+                rightTitle = "Status Wake Word",
+                rightValue = state.wakeWordStatus.ifBlank { "Nonaktif" },
                 compact = true,
             )
         }
@@ -1310,15 +1230,15 @@ private fun DeveloperToolsCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(text = "开发者工具", fontWeight = FontWeight.SemiBold)
+                Text(text = "Alat Developer", fontWeight = FontWeight.SemiBold)
                 Text(
-                    text = "调试日志、TTS 音频导出和 MCP 调试都收在这里",
+                    text = "Log debug dan alat diagnosis ada di sini",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             Text(
-                text = if (expanded) "收起" else "展开",
+                text = if (expanded) "Tutup" else "Buka",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -1328,24 +1248,24 @@ private fun DeveloperToolsCard(
             HorizontalDivider()
             SettingsSwitch(
                 icon = "🪵",
-                title = "调试日志",
-                subtitle = "仅在需要排查问题时开启",
+                title = "Log Debug",
+                subtitle = "Aktifkan hanya saat troubleshooting",
                 checked = state.debugLoggingEnabled,
                 onCheckedChange = onDebugLoggingEnabledChanged,
             )
             HorizontalDivider()
             SettingsSwitch(
                 icon = "🎧",
-                title = "TTS 音频导出",
-                subtitle = "把播报 PCM 导出为 WAV 文件用于排查",
+                title = "Ekspor Audio TTS",
+                subtitle = "Ekspor PCM ke WAV untuk diagnosis",
                 checked = state.debugWavDumpEnabled,
                 onCheckedChange = onDebugWavDumpEnabledChanged,
             )
             HorizontalDivider()
             SettingsField(
                 icon = "🧪",
-                title = "MCP 请求",
-                subtitle = "发送到当前会话的 MCP JSON 负载",
+                title = "Request MCP",
+                subtitle = "Payload JSON MCP ke sesi ini",
                 value = state.mcpPayload,
                 onValueChange = onMcpPayloadChanged,
                 singleLine = false,
@@ -1353,9 +1273,9 @@ private fun DeveloperToolsCard(
             )
             HorizontalDivider()
             SettingsActionRow(
-                primaryLabel = "发送 MCP",
+                primaryLabel = "Kirim MCP",
                 onPrimaryClick = onSendMcp,
-                secondaryLabel = "清空日志",
+                secondaryLabel = "Hapus Log",
                 onSecondaryClick = onClearLogs,
             )
             if (state.debugLoggingEnabled) {
@@ -1368,7 +1288,7 @@ private fun DeveloperToolsCard(
 @Composable
 private fun LogPane(lines: List<LogLine>) {
     val body = if (lines.isEmpty()) {
-        "暂无日志。"
+        "Belum ada log."
     } else {
         lines.takeLast(160).joinToString(separator = "\n") { "[${it.timestamp}] ${it.message}" }
     }
@@ -1441,13 +1361,13 @@ private fun StatusTag(text: String) {
     }
 }
 
-private fun ConnectionStatus.toChineseText(): String {
+private fun ConnectionStatus.toIndonesianText(): String {
     return when (this) {
-        ConnectionStatus.DISCONNECTED -> "未连接"
-        ConnectionStatus.FETCHING_CONFIG -> "获取配置中"
-        ConnectionStatus.ACTIVATING -> "激活中"
-        ConnectionStatus.CONNECTING -> "连接中"
-        ConnectionStatus.CONNECTED -> "已连接"
-        ConnectionStatus.FAILED -> "连接失败"
+        ConnectionStatus.DISCONNECTED -> "Tidak Tersambung"
+        ConnectionStatus.FETCHING_CONFIG -> "Mengambil konfigurasi"
+        ConnectionStatus.ACTIVATING -> "Mengaktivasi"
+        ConnectionStatus.CONNECTING -> "Menyambung"
+        ConnectionStatus.CONNECTED -> "Tersambung"
+        ConnectionStatus.FAILED -> "Gagal Tersambung"
     }
 }
