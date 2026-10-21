@@ -40,7 +40,7 @@ private const val LOG_TAG = "XiaozhiClient"
 private const val UNBURNED_SERIAL_NUMBER = "未烧录"
 private const val WAKE_WORD_DISABLED = "未启用"
 private const val WAKE_WORD_STANDBY = "待命中"
-private const val DEFAULT_AUDIO_ROUTE = "媒体输出：扬声器 / 输入：机身麦克风"
+private const val DEFAULT_AUDIO_ROUTE = "Output: Speaker / Input: Mikrofon"
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val preferences = AppPreferences(application)
@@ -75,7 +75,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             TermuxCommandEvents.events.collect(::handleTermuxCommandResult)
         }
-        addLog("客户端已就绪")
+        addLog("Klien siap")
         addLog("当前使用未烧录设备接入模式")
     }
 
@@ -225,7 +225,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         pendingListeningMode = ListeningMode.REALTIME
         updateState { copy(wakeWordStatus = "已唤醒：$phrase") }
         addLog("检测到唤醒词：$phrase")
-        ensureReadyForConversation(trigger = "唤醒词")
+        ensureReadyForConversation(trigger = "Kata kunci")
     }
 
     fun onMicrophonePermissionDenied(reason: String) {
@@ -285,7 +285,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (websocketConfig != null) {
                     addLog("已收到 WebSocket 配置：${websocketConfig.url}")
                 } else {
-                    addLog("OTA 返回中没有 WebSocket 配置")
+                    addLog("OTA tidak mengembalikan konfigurasi WebSocket")
                 }
 
                 if (result.activation != null && websocketConfig == null) {
@@ -330,18 +330,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         if (state.connectionStatus == ConnectionStatus.CONNECTED) {
-            addLog("WebSocket 已连接")
+            addLog("WebSocket tersambung")
             flushPendingActions()
             return
         }
         val protocolVersion = state.protocolVersion.toIntOrNull()
         if (state.websocketUrl.isBlank()) {
-            addLog("WebSocket 地址为空，请先获取官方配置")
+            addLog("Alamat WebSocket kosong, ambil konfigurasi resmi dulu")
             updateState { copy(connectionStatus = ConnectionStatus.FAILED) }
             return
         }
         if (protocolVersion == null) {
-            addLog("协议版本必须是整数")
+            addLog("Versi protokol harus angka bulat")
             updateState { copy(connectionStatus = ConnectionStatus.FAILED) }
             return
         }
@@ -436,7 +436,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         isTurnActive = isRecording || isTurnActive,
                         activeListeningMode = if (isRecording) mode.wireValue else "",
                         wakeWordStatus = when {
-                            wakeWordEnabled && isRecording -> "会话中"
+                            wakeWordEnabled && isRecording -> "Dalam sesi"
                             wakeWordEnabled -> WAKE_WORD_STANDBY
                             else -> wakeWordStatus
                         },
@@ -459,7 +459,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun stopListening() {
         pendingListeningMode = null
-        finishListening(sendStop = true, stopCapture = true, keepTurnActive = true, reason = "已停止录音")
+        finishListening(sendStop = true, stopCapture = true, keepTurnActive = true, reason = "Rekaman berhenti")
     }
 
     fun abortSpeaking() {
@@ -470,7 +470,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         updateState { copy(isAssistantSpeaking = false) }
         if (realtimeClient.sendAbort()) {
-            addLog("已向服务端发送打断请求")
+            addLog("Permintaan interupsi terkirim")
         }
     }
 
@@ -483,13 +483,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         addChatMessage(ChatRole.USER, prompt)
         pendingTextPrompts.addLast(prompt)
         updateState { copy(isTurnActive = true) }
-        addLog("准备发送文字消息")
+        addLog("Menyiapkan pesan teks")
         ensureReadyForConversation(trigger = "文字消息")
     }
 
     fun sendMcp() {
         if (realtimeClient.sendMcp(uiState.value.mcpPayload)) {
-            addLog("已发送 MCP 请求")
+            addLog("Request MCP terkirim")
         }
     }
 
@@ -567,7 +567,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             is XiaozhiRealtimeClient.RealtimeEvent.Disconnected -> {
-                finishListening(sendStop = false, stopCapture = true, keepTurnActive = false, reason = "Socket 已关闭")
+                finishListening(sendStop = false, stopCapture = true, keepTurnActive = false, reason = "Socket ditutup")
                 audioEngine.clearPlayback {
                     updateState { copy(isAssistantSpeaking = it) }
                 }
@@ -583,7 +583,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             is XiaozhiRealtimeClient.RealtimeEvent.Error -> {
-                finishListening(sendStop = false, stopCapture = true, keepTurnActive = false, reason = "实时通道异常")
+                finishListening(sendStop = false, stopCapture = true, keepTurnActive = false, reason = "Kanal real-time bermasalah")
                 updateState {
                     copy(
                         connectionStatus = ConnectionStatus.FAILED,
@@ -667,13 +667,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         when (uiState.value.connectionStatus) {
             ConnectionStatus.CONNECTED -> flushPendingActions()
             ConnectionStatus.CONNECTING,
-            ConnectionStatus.FETCHING_CONFIG -> addLog("$trigger 已排队，等待连接完成")
+            ConnectionStatus.FETCHING_CONFIG -> addLog("$trigger antre, menunggu koneksi")
             else -> {
                 if (uiState.value.websocketUrl.isBlank()) {
-                    addLog("$trigger 需要先获取官方配置")
+                    addLog("$trigger butuh ambil konfigurasi resmi dulu")
                     fetchOfficialConfig()
                 } else {
-                    addLog("$trigger 需要先建立连接")
+                    addLog("$trigger butuh koneksi dulu")
                     connect()
                 }
             }
@@ -690,7 +690,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (!realtimeClient.sendDetectText(phrase)) {
                 return
             }
-            addLog("已上报唤醒词：$phrase")
+            addLog("Wake word terkirim: $phrase")
             pendingWakePhrase = null
         }
 
@@ -710,7 +710,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun interruptCurrentTurn(reason: String) {
         var interrupted = false
         if (uiState.value.isRecording) {
-            finishListening(sendStop = false, stopCapture = true, keepTurnActive = false, reason = "已切换到新的输入")
+            finishListening(sendStop = false, stopCapture = true, keepTurnActive = false, reason = "Beralih ke input baru")
             interrupted = true
         }
         if (uiState.value.isAssistantSpeaking) {
