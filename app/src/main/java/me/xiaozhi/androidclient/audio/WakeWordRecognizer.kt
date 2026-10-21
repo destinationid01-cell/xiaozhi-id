@@ -52,7 +52,7 @@ class WakeWordRecognizer(
         if (parsedWakeWords.isEmpty()) {
             shouldListen = false
             stop(updateStatus = false)
-            publishStatus("请先在设置里填写唤醒词")
+            publishStatus("Isi kata kunci dulu di pengaturan")
             return
         }
 
@@ -94,7 +94,7 @@ class WakeWordRecognizer(
             recognizer.cancel()
             recognizer.startListening(buildIntent())
         } catch (error: Exception) {
-            onError("启动唤醒监听失败：${error.message.orEmpty()}")
+            onError("Gagal memulai wake listener: ${error.message.orEmpty()}")
             scheduleRestart(BUSY_RESTART_DELAY_MS)
         }
     }
@@ -109,7 +109,7 @@ class WakeWordRecognizer(
                 speechRecognizer = it
             }
         }.getOrElse { error ->
-            onError("创建语音识别器失败：${error.message.orEmpty()}")
+            onError("Gagal membuat speech recognizer: ${error.message.orEmpty()}")
             null
         }
     }
@@ -152,7 +152,7 @@ class WakeWordRecognizer(
             lastDetectedAtMs = now
             shouldListen = false
             speechRecognizer?.cancel()
-            publishStatus("已唤醒：$matchedPhrase")
+            publishStatus("Terdeteksi: $matchedPhrase")
             onWakeWordDetected(matchedPhrase)
         } else if (matches.isNotEmpty()) {
             publishStatus("待命中")
