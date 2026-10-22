@@ -222,7 +222,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         pendingWakePhrase = phrase
-        pendingListeningMode = ListeningMode.REALTIME
+        // AUTO: bicara → diam → otomatis terkirim (seperti Google Assistant).
+        // REALTIME tidak punya auto-stop sehingga harus stop manual.
+        pendingListeningMode = ListeningMode.AUTO
         updateState { copy(wakeWordStatus = "已唤醒：$phrase") }
         addLog("检测到唤醒词：$phrase")
         ensureReadyForConversation(trigger = "Kata kunci")

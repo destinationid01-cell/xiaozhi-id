@@ -103,11 +103,11 @@ private sealed interface PendingAudioAction {
     data object EnableWakeWord : PendingAudioAction
 }
 
-private val ChatBackground = Color(0xFFF7F4F9)
-private val SettingsBackground = Color(0xFFF4EFF7)
-private val UserBubble = Color(0xFF93E26A)
+private val ChatBackground = Color(0xFFFAFAFA)
+private val SettingsBackground = Color(0xFFF5F5F5)
+private val UserBubble = Color(0xFF161616)
 private val AssistantBubble = Color.White
-private val HeaderTint = Color(0xFFF1E9FB)
+private val HeaderTint = Color(0xFFFAFAFA)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -190,6 +190,15 @@ private fun XiaozhiApp() {
 
     LaunchedEffect(Unit) {
         viewModel.refreshPythonRuntimeStatus()
+        // Auto-connect saat aplikasi dibuka (tanpa perlu tekan Sambung manual).
+        // Hanya sekali saat launch; tidak retry otomatis bila gagal.
+        val s = viewModel.uiState.value
+        if (s.websocketUrl.isNotBlank() &&
+            s.connectionStatus == ConnectionStatus.DISCONNECTED &&
+            !s.activationPending
+        ) {
+            viewModel.connect()
+        }
     }
 
     LaunchedEffect(state.isAssistantSpeaking) {
@@ -775,7 +784,7 @@ private fun ChatBubble(message: ChatMessage, assistantAvatarPath: String) {
                 Column(horizontalAlignment = Alignment.End) {
                     Surface(
                         color = UserBubble,
-                        contentColor = Color(0xFF14210A),
+                        contentColor = Color.White,
                         shape = RoundedCornerShape(20.dp, 8.dp, 20.dp, 20.dp),
                     ) {
                         Text(

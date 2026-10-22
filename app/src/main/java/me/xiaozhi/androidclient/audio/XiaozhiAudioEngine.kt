@@ -534,10 +534,12 @@ class XiaozhiAudioEngine(context: Context) {
             return null
         }
         val devices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)
+        // Prioritas: headset kabel > headset Bluetooth > routing default sistem.
+        // JANGAN paksa mic bawaan pertama: di sebagian HP (mis. mic bawah rusak,
+        // mic atas normal) pilihan paksa justru mengambil mic yang salah.
+        // Kembalikan null agar Android memakai routing default-nya sendiri.
         return devices.firstOrNull(::isWiredInputDevice)
-            ?: devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_MIC }
             ?: devices.firstOrNull(::isBluetoothInputDevice)
-            ?: devices.firstOrNull()
     }
 
     private fun findPreferredOutputDevice(): AudioDeviceInfo? {
