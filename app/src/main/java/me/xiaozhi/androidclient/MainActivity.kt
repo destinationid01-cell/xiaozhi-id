@@ -2,6 +2,7 @@ package me.xiaozhi.androidclient
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import java.io.File
 import androidx.activity.ComponentActivity
@@ -149,6 +150,10 @@ private fun XiaozhiApp() {
         onDispose { runCatching { context.unregisterReceiver(speechReceiver) } }
     }
 
+    val notificationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { /* hasil izin notifikasi tidak mengubah alur */ }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
     ) { granted ->
@@ -177,10 +182,6 @@ private fun XiaozhiApp() {
         }
         pendingAudioAction = null
     }
-
-    val notificationLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission(),
-    ) { /* hasil izin notifikasi tidak mengubah alur */ }
 
     val avatarPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
