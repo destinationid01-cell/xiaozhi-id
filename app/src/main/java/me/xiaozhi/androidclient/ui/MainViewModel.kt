@@ -58,6 +58,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var pendingListeningMode: ListeningMode? = null
     private var pendingWakePhrase: String? = null
     private val pendingTextPrompts = ArrayDeque<String>()
+    /** True jika turn saat ini dipicu deteksi suara (perlu verifikasi kata kunci di transkrip). */
+    @Volatile private var isWakeTurn = false
 
     private val _uiState = MutableStateFlow(loadInitialState())
     val uiState = _uiState.asStateFlow()
@@ -118,10 +120,46 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         updateAndPersist {
             copy(
                 wakeWordEnabled = enabled,
-                wakeWordStatus = if (enabled) WAKE_WORD_STANDBY else WAKE_WORD_DISABLED,
+                wakeWordStatus = if (enabled) "Siaga aktif" else WAKE_WORD_DISABLED,
             )
         }
-        addLog(if (enabled) "语音唤醒已开启" else "语音唤醒已关闭")
+        val app = getApplication<Application>()
+        if (enabled) {
+            me.xiaozhi.androidclient.XiaozhiVoiceService.start(app)
+            addLog("Siaga selalu aktif — sebut kata kunci untuk bicara")
+        } else {
+            me.xiaozhi.androidclient.XiaozhiVoiceService.stop(app)
+            addLog("Siaga selalu dimatikan")
+        }
+    }
+
+    /**
+     * Dipanggil saat SmartWakeListener (via XiaozhiVoiceService) mendeteksi
+     * adanya suara. Memulai sesi dengar mode AUTO; verifikasi kata kunci
+     * dilakukan saat transkrip STT tiba di [handleSttMessage].
+     */
+    fun onWakeSpeechDetected() {
+        val state = uiState.value
+        if (state.isRecording || state.isAssistantSpeaking) return
+        if (state.connectionStatus != ConnectionStatus.CONNECTED) {
+            ensureReadyForConversation(trigger = "Deteksi suara")
+            return
+        }
+        isWakeTurn = true
+        updateState { copy(wakeWordStatus = "Mendengarkan…") }
+        addLog("Suara terdeteksi — memeriksa kata kunci")
+        startListening(ListeningMode.AUTO)
+    }
+
+    /** Cek apakah transkrip mengandung salah satu kata kunci (case-insensitive). */
+    private fun matchesWakeWord(text: String): Boolean {
+        val normalized = text.lowercase().filter { it.isLetterOrDigit() }
+        if (normalized.isBlank()) return false
+        return uiState.value.wakeWords
+            .split(',', '，', ';', '；', '\n')
+            .map { it.trim().lowercase().filter(Char::isLetterOrDigit) }
+            .filter { it.isNotBlank() }
+            .any { normalized.contains(it) }
     }
 
     fun updateWakeWords(value: String) = updateAndPersist { copy(wakeWords = value) }
@@ -215,19 +253,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (previous != normalized) {
             addLog("音频路由更新：$normalized")
         }
-    }
-
-    fun onWakeWordDetected(phrase: String) {
-        if (uiState.value.isRecording) {
-            return
-        }
-        pendingWakePhrase = phrase
-        // AUTO: bicara → diam → otomatis terkirim (seperti Google Assistant).
-        // REALTIME tidak punya auto-stop sehingga harus stop manual.
-        pendingListeningMode = ListeningMode.AUTO
-        updateState { copy(wakeWordStatus = "已唤醒：$phrase") }
-        addLog("检测到唤醒词：$phrase")
-        ensureReadyForConversation(trigger = "Kata kunci")
     }
 
     fun onMicrophonePermissionDenied(reason: String) {
@@ -512,6 +537,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         keepTurnActive: Boolean,
         reason: String,
     ) {
+        isWakeTurn = false
         if (stopCapture) {
             viewModelScope.launch {
                 audioEngine.stopCapture()
@@ -660,6 +686,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         addLog("<= $rawText")
         val text = parseJson(rawText)?.optString("text").orEmpty()
         if (text.isNotBlank() && text != uiState.value.lastSttText) {
+            // Verifikasi kata kunci untuk turn yang dipicu deteksi suara.
+            // Jika transkrip tidak mengandung kata kunci -> bukan panggilan untuk kita.
+            if (isWakeTurn) {
+                isWakeTurn = false
+                if (!matchesWakeWord(text)) {
+                    addLog("Bukan kata kunci — kembali siaga")
+                    updateState { copy(wakeWordStatus = "Siaga aktif") }
+                    abortSpeaking()
+                    return
+                }
+                addLog("Kata kunci cocok: $text")
+                updateState { copy(wakeWordStatus = "Aktif — silakan bicara") }
+            }
             updateState { copy(lastSttText = text, isTurnActive = true) }
             addChatMessage(ChatRole.USER, text)
         }

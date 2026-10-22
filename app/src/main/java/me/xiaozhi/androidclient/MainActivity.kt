@@ -86,7 +86,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
 import coil.compose.AsyncImage
-import me.xiaozhi.androidclient.audio.WakeWordRecognizer
 import me.xiaozhi.androidclient.model.ChatMessage
 import me.xiaozhi.androidclient.model.ChatRole
 import me.xiaozhi.androidclient.model.ConnectionStatus
@@ -129,13 +128,25 @@ private fun XiaozhiApp() {
     var pendingAudioAction by remember { mutableStateOf<PendingAudioAction?>(null) }
     var playbackCooldownActive by remember { mutableStateOf(false) }
 
-    val wakeWordRecognizer = remember(context) {
-        WakeWordRecognizer(
-            context = context,
-            onWakeWordDetected = viewModel::onWakeWordDetected,
-            onStatusChanged = viewModel::updateWakeWordStatus,
-            onError = viewModel::updateWakeWordStatus,
-        )
+    val speechReceiver = remember {
+        object : android.content.BroadcastReceiver() {
+            override fun onReceive(ctx: android.content.Context?, intent: Intent?) {
+                if (intent?.action == XiaozhiVoiceService.ACTION_SPEECH) {
+                    viewModel.onWakeSpeechDetected()
+                }
+            }
+        }
+    }
+
+    DisposableEffect(context, speechReceiver) {
+        val filter = android.content.IntentFilter(XiaozhiVoiceService.ACTION_SPEECH)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(speechReceiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            context.registerReceiver(speechReceiver, filter)
+        }
+        onDispose { runCatching { context.unregisterReceiver(speechReceiver) } }
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -148,14 +159,28 @@ private fun XiaozhiApp() {
             }
 
             PendingAudioAction.EnableWakeWord -> {
-                if (granted) viewModel.updateWakeWordEnabled(true)
-                else viewModel.onMicrophonePermissionDenied("wake_word")
+                if (granted) {
+                    // Minta izin notifikasi juga (Android 13+) agar notifikasi siaga tampil
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                        ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.POST_NOTIFICATIONS,
+                        ) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                    viewModel.updateWakeWordEnabled(true)
+                } else viewModel.onMicrophonePermissionDenied("wake_word")
             }
 
             null -> Unit
         }
         pendingAudioAction = null
     }
+
+    val notificationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { /* hasil izin notifikasi tidak mengubah alur */ }
 
     val avatarPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
@@ -165,7 +190,7 @@ private fun XiaozhiApp() {
         }
     }
 
-    DisposableEffect(lifecycleOwner, wakeWordRecognizer) {
+    DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_START -> {
@@ -175,7 +200,6 @@ private fun XiaozhiApp() {
 
                 Lifecycle.Event.ON_STOP -> {
                     isForeground = false
-                    wakeWordRecognizer.stop(updateStatus = false)
                 }
 
                 else -> Unit
@@ -184,7 +208,6 @@ private fun XiaozhiApp() {
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            wakeWordRecognizer.release()
         }
     }
 
@@ -208,27 +231,6 @@ private fun XiaozhiApp() {
             delay(1800L)
             playbackCooldownActive = false
         }
-    }
-
-    LaunchedEffect(
-        state.wakeWordEnabled,
-        state.wakeWords,
-        state.isRecording,
-        state.isAssistantSpeaking,
-        state.isTurnActive,
-        state.connectionStatus,
-        playbackCooldownActive,
-        isForeground,
-    ) {
-        val shouldRun = isForeground &&
-            state.wakeWordEnabled &&
-            !state.isRecording &&
-            !state.isAssistantSpeaking &&
-            !state.isTurnActive &&
-            !playbackCooldownActive &&
-            state.connectionStatus != ConnectionStatus.CONNECTING
-        if (shouldRun) wakeWordRecognizer.start(state.wakeWords)
-        else wakeWordRecognizer.stop(updateStatus = false)
     }
 
     val requestMicrophoneForMode: (ListeningMode) -> Unit = { mode ->
@@ -564,7 +566,7 @@ private fun SettingsScreen(
         SettingsCard {
             SettingsSwitch(
                 icon = "🎙️",
-                title = "Bangun Suara",
+                title = "Siaga Selalu",
                 subtitle = state.wakeWordStatus.ifBlank { "Nonaktif" },
                 checked = state.wakeWordEnabled,
                 onCheckedChange = onWakeWordEnabledChanged,
