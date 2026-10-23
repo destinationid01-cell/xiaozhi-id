@@ -16,7 +16,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import me.xiaozhi.androidclient.audio.SmartWakeListener
+import me.xiaozhi.androidclient.audio.WakeWordRecognizer
+import me.xiaozhi.androidclient.data.AppPreferences
 
 /**
  * Foreground service "Siaga Selalu".
@@ -24,11 +25,11 @@ import me.xiaozhi.androidclient.audio.SmartWakeListener
  * Tugasnya dua:
  * 1. Menjaga proses aplikasi tetap hidup (sistem tidak membunuh saat layar
  *    mati atau aplikasi di-background).
- * 2. Menjalankan [SmartWakeListener] yang mendeteksi suara tanpa layanan
- *    speech Google (tanpa beep).
+ * 2. Menjalankan [WakeWordRecognizer] yang mendeteksi kata kunci secara
+ *    lokal (tanpa beep — stream audio di-mute selama mendengarkan).
  *
- * Deteksi kata kunci yang sebenarnya dilakukan di MainViewModel via
- * transkrip server; service ini hanya meneruskan event "ada suara".
+ * Deteksi dilakukan LOKAL sebelum audio dikirim ke server, sehingga tidak
+ * ada turn palsu yang terlanjur diproses server.
  */
 class XiaozhiVoiceService : Service() {
 
@@ -37,7 +38,8 @@ class XiaozhiVoiceService : Service() {
         const val NOTIFICATION_ID = 1001
         const val ACTION_START = "me.xiaozhi.androidclient.action.START_STANDBY"
         const val ACTION_STOP = "me.xiaozhi.androidclient.action.STOP_STANDBY"
-        const val ACTION_SPEECH = "me.xiaozhi.androidclient.action.SPEECH_DETECTED"
+        const val ACTION_WAKE_WORD = "me.xiaozhi.androidclient.action.WAKE_WORD_DETECTED"
+        const val EXTRA_PHRASE = "phrase"
 
         fun start(context: Context) {
             val intent = Intent(context, XiaozhiVoiceService::class.java).setAction(ACTION_START)
@@ -54,7 +56,7 @@ class XiaozhiVoiceService : Service() {
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private var wakeListener: SmartWakeListener? = null
+    private var wakeRecognizer: WakeWordRecognizer? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -62,11 +64,26 @@ class XiaozhiVoiceService : Service() {
         super.onCreate()
         createChannel()
         startForegroundWithType()
-        wakeListener = SmartWakeListener(this) {
-            // Teruskan sebagai broadcast agar MainViewModel yang hidup bisa menangani.
-            // Jika activity mati, broadcast ini diabaikan (tidak crash).
-            sendBroadcast(Intent(ACTION_SPEECH).setPackage(packageName))
-        }.also { it.start() }
+        val wakeWords = AppPreferences(this).load().wakeWords
+        wakeRecognizer = WakeWordRecognizer(
+            context = this,
+            onWakeWordDetected = { phrase ->
+                // Teruskan sebagai broadcast agar MainViewModel yang hidup bisa menangani.
+                // Jika activity mati, broadcast ini diabaikan (tidak crash).
+                sendBroadcast(
+                    Intent(ACTION_WAKE_WORD)
+                        .setPackage(packageName)
+                        .putExtra(EXTRA_PHRASE, phrase)
+                )
+                // Mulai lagi mendengarkan setelah jeda (sesi percakapan ditangani activity)
+                scope.launch {
+                    kotlinx.coroutines.delay(3_000)
+                    wakeRecognizer?.start(AppPreferences(this@XiaozhiVoiceService).load().wakeWords)
+                }
+            },
+            onStatusChanged = { /* status tampil di notifikasi bila perlu */ },
+            onError = { /* log saja */ },
+        ).also { it.start(wakeWords) }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -80,8 +97,8 @@ class XiaozhiVoiceService : Service() {
 
     override fun onDestroy() {
         scope.launch {
-            wakeListener?.stop()
-            wakeListener = null
+            wakeRecognizer?.release()
+            wakeRecognizer = null
         }
         scope.cancel()
         super.onDestroy()

@@ -134,10 +134,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Dipanggil saat SmartWakeListener (via XiaozhiVoiceService) mendeteksi
-     * adanya suara. Memulai sesi dengar mode AUTO; verifikasi kata kunci
-     * dilakukan saat transkrip STT tiba di [handleSttMessage].
+     * Dipanggil saat WakeWordRecognizer (via XiaozhiVoiceService) mendeteksi
+     * kata kunci secara lokal. Audio BARU dikirim ke server setelah kata
+     * kunci terverifikasi — tidak ada turn palsu.
      */
+    fun onWakeWordDetected(phrase: String) {
+        val state = uiState.value
+        if (state.isRecording || state.isAssistantSpeaking) return
+        if (state.connectionStatus != ConnectionStatus.CONNECTED) {
+            ensureReadyForConversation(trigger = "Kata kunci \"$phrase\"")
+            return
+        }
+        // Kata kunci sudah diverifikasi lokal; tidak perlu verifikasi ulang via STT.
+        isWakeTurn = false
+        updateState { copy(wakeWordStatus = "Aktif — silakan bicara") }
+        addLog("Kata kunci terdeteksi: $phrase")
+        startListening(ListeningMode.AUTO)
+    }
+
+    /**
+     * Dipakai saat activity sendiri yang mendeteksi (fallback bila service mati).
+     * @deprecated Gunakan [onWakeWordDetected] — verifikasi lokal via service.
+     */
+    @Deprecated("Deteksi via XiaozhiVoiceService")
     fun onWakeSpeechDetected() {
         val state = uiState.value
         if (state.isRecording || state.isAssistantSpeaking) return
@@ -537,27 +556,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         keepTurnActive: Boolean,
         reason: String,
     ) {
-        // Turn dari deteksi suara yang berakhir TANPA transkrip terverifikasi
-        // (false trigger dari suara latar): batalkan diam-diam, jangan teruskan
-        // ke LLM agar asisten tidak "ngomong sendiri".
-        if (isWakeTurn) {
-            isWakeTurn = false
-            clearPendingConversation()
-            if (stopCapture) {
-                viewModelScope.launch { audioEngine.stopCapture() }
-            }
-            realtimeClient.sendAbort()
-            updateState {
-                copy(
-                    isRecording = false,
-                    isTurnActive = false,
-                    activeListeningMode = "",
-                    wakeWordStatus = if (wakeWordEnabled) "Siaga aktif" else wakeWordStatus,
-                )
-            }
-            addLog("Deteksi palsu diabaikan — kembali siaga")
-            return
-        }
         if (stopCapture) {
             viewModelScope.launch {
                 audioEngine.stopCapture()

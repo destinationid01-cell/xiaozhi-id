@@ -133,15 +133,16 @@ private fun XiaozhiApp() {
     val speechReceiver = remember {
         object : android.content.BroadcastReceiver() {
             override fun onReceive(ctx: android.content.Context?, intent: Intent?) {
-                if (intent?.action == XiaozhiVoiceService.ACTION_SPEECH) {
-                    viewModel.onWakeSpeechDetected()
+                if (intent?.action == XiaozhiVoiceService.ACTION_WAKE_WORD) {
+                    val phrase = intent.getStringExtra(XiaozhiVoiceService.EXTRA_PHRASE).orEmpty()
+                    viewModel.onWakeWordDetected(phrase)
                 }
             }
         }
     }
 
     DisposableEffect(context, speechReceiver) {
-        val filter = android.content.IntentFilter(XiaozhiVoiceService.ACTION_SPEECH)
+        val filter = android.content.IntentFilter(XiaozhiVoiceService.ACTION_WAKE_WORD)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             context.registerReceiver(speechReceiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED)
         } else {
