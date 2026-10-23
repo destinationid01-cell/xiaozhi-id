@@ -34,8 +34,10 @@ class SmartWakeListener(
     companion object {
         private const val SAMPLE_RATE = 16000
         private const val FRAME_SIZE = 960 // 60ms @ 16kHz
-        private const val SPEECH_RMS_THRESHOLD = 900.0
-        private const val SPEECH_FRAMES_REQUIRED = 6 // ~360ms suara kontinyu
+        // Ambang dinaikkan: 900 terlalu sensitif untuk dengung AC/kipas.
+        // Suara bicara normal pada jarak wajar biasanya RMS 1500+.
+        private const val SPEECH_RMS_THRESHOLD = 1400.0
+        private const val SPEECH_FRAMES_REQUIRED = 8 // ~480ms suara kontinyu
         private const val COOLDOWN_MS = 3_000L
     }
 

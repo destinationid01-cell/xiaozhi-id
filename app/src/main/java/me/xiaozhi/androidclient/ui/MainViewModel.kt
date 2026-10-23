@@ -537,7 +537,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         keepTurnActive: Boolean,
         reason: String,
     ) {
-        isWakeTurn = false
+        // Turn dari deteksi suara yang berakhir TANPA transkrip terverifikasi
+        // (false trigger dari suara latar): batalkan diam-diam, jangan teruskan
+        // ke LLM agar asisten tidak "ngomong sendiri".
+        if (isWakeTurn) {
+            isWakeTurn = false
+            clearPendingConversation()
+            if (stopCapture) {
+                viewModelScope.launch { audioEngine.stopCapture() }
+            }
+            realtimeClient.sendAbort()
+            updateState {
+                copy(
+                    isRecording = false,
+                    isTurnActive = false,
+                    activeListeningMode = "",
+                    wakeWordStatus = if (wakeWordEnabled) "Siaga aktif" else wakeWordStatus,
+                )
+            }
+            addLog("Deteksi palsu diabaikan — kembali siaga")
+            return
+        }
         if (stopCapture) {
             viewModelScope.launch {
                 audioEngine.stopCapture()
