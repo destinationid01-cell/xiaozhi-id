@@ -1,12 +1,10 @@
 package me.xiaozhi.androidclient.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
@@ -15,62 +13,58 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private val MonoBlack = Color(0xFF161616)
-private val MonoDark = Color(0xFF1E1E1E)
-private val MonoGray = Color(0xFF6B6B6B)
-private val MonoLightGray = Color(0xFFE8E8E8)
-private val MonoPaper = Color(0xFFFAFAFA)
-private val Accent = Color(0xFF0F766E)
-private val AccentSoft = Color(0xFFDDF3F0)
+/** Tema Hologram Universe — selalu gelap, nuansa antariksa + neon. */
+object HoloColors {
+    val SpaceBlack = Color(0xFF050510)
+    val SpaceDeep = Color(0xFF0A0A1E)
+    val SpacePanel = Color(0xFF12122B)
+    val SpacePanelTranslucent = Color(0xCC12122B)
+    val NeonCyan = Color(0xFF00E5FF)
+    val NeonCyanSoft = Color(0xFF66F6FF)
+    val NeonPurple = Color(0xFFA855F7)
+    val NeonPurpleSoft = Color(0xFFD8B4FE)
+    val NeonGreen = Color(0xFF34FF9E)
+    val NeonOrange = Color(0xFFFF9F43)
+    val NeonPink = Color(0xFFFF4D8D)
+    val StarWhite = Color(0xFFE8F4FF)
+    val TextDim = Color(0xFF8B93B8)
+    val GlassBorder = Color(0x3300E5FF)
 
-private val LightColors = lightColorScheme(
-    primary = MonoBlack,
-    onPrimary = Color.White,
-    primaryContainer = MonoLightGray,
-    onPrimaryContainer = MonoBlack,
-    secondary = MonoGray,
+    /** Warna orb berdasarkan status. */
+    fun orbColorFor(status: OrbStatus): Color = when (status) {
+        OrbStatus.STANDBY -> NeonCyan
+        OrbStatus.LISTENING -> NeonGreen
+        OrbStatus.THINKING -> NeonPurple
+        OrbStatus.SPEAKING -> NeonOrange
+        OrbStatus.IDLE -> TextDim
+    }
+}
+
+enum class OrbStatus { STANDBY, LISTENING, THINKING, SPEAKING, IDLE }
+
+private val HoloColorScheme = darkColorScheme(
+    primary = HoloColors.NeonCyan,
+    onPrimary = HoloColors.SpaceBlack,
+    primaryContainer = HoloColors.SpacePanel,
+    onPrimaryContainer = HoloColors.StarWhite,
+    secondary = HoloColors.NeonPurple,
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFF0F0F0),
-    onSecondaryContainer = MonoBlack,
-    tertiary = Accent,
-    onTertiary = Color.White,
-    tertiaryContainer = AccentSoft,
-    onTertiaryContainer = Color(0xFF0B3D39),
-    background = MonoPaper,
-    onBackground = MonoBlack,
-    surface = Color.White,
-    onSurface = MonoBlack,
-    surfaceVariant = Color(0xFFF1F1F1),
-    onSurfaceVariant = MonoGray,
-    error = Color(0xFFBA1A1A),
+    secondaryContainer = HoloColors.SpacePanel,
+    onSecondaryContainer = HoloColors.StarWhite,
+    tertiary = HoloColors.NeonCyanSoft,
+    onTertiary = HoloColors.SpaceBlack,
+    tertiaryContainer = HoloColors.SpaceDeep,
+    onTertiaryContainer = HoloColors.NeonCyanSoft,
+    background = HoloColors.SpaceBlack,
+    onBackground = HoloColors.StarWhite,
+    surface = HoloColors.SpacePanel,
+    onSurface = HoloColors.StarWhite,
+    surfaceVariant = HoloColors.SpaceDeep,
+    onSurfaceVariant = HoloColors.TextDim,
+    error = HoloColors.NeonPink,
     onError = Color.White,
-    errorContainer = Color(0xFFFFDAD6),
-    onErrorContainer = Color(0xFF410002),
-)
-
-private val DarkColors = darkColorScheme(
-    primary = Color.White,
-    onPrimary = MonoBlack,
-    primaryContainer = Color(0xFF2E2E2E),
-    onPrimaryContainer = Color.White,
-    secondary = Color(0xFFA8A8A8),
-    onSecondary = MonoBlack,
-    secondaryContainer = Color(0xFF2A2A2A),
-    onSecondaryContainer = Color.White,
-    tertiary = Color(0xFF5EEAD4),
-    onTertiary = MonoBlack,
-    tertiaryContainer = Color(0xFF134E4A),
-    onTertiaryContainer = Color(0xFFDDF3F0),
-    background = MonoDark,
-    onBackground = Color(0xFFF5F5F5),
-    surface = Color(0xFF242424),
-    onSurface = Color(0xFFF5F5F5),
-    surfaceVariant = Color(0xFF2E2E2E),
-    onSurfaceVariant = Color(0xFFA8A8A8),
-    error = Color(0xFFFFB4AB),
-    onError = Color(0xFF690005),
-    errorContainer = Color(0xFF93000A),
-    onErrorContainer = Color(0xFFFFDAD6),
+    errorContainer = Color(0xFF3D0A1E),
+    onErrorContainer = Color(0xFFFFD6E7),
 )
 
 private val AppShapes = Shapes(
@@ -83,7 +77,7 @@ private val AppShapes = Shapes(
 
 private val AppTypography = Typography(
     titleLarge = TextStyle(
-        fontFamily = FontFamily.Serif,
+        fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Bold,
         fontSize = 24.sp,
         lineHeight = 30.sp,
@@ -123,7 +117,7 @@ private val AppTypography = Typography(
 @Composable
 fun XiaozhiClientTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = if (isSystemInDarkTheme()) DarkColors else LightColors,
+        colorScheme = HoloColorScheme,
         typography = AppTypography,
         shapes = AppShapes,
         content = content,

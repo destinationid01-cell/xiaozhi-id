@@ -57,6 +57,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -94,7 +95,10 @@ import me.xiaozhi.androidclient.model.ConnectionStatus
 import me.xiaozhi.androidclient.model.ListeningMode
 import me.xiaozhi.androidclient.model.LogLine
 import me.xiaozhi.androidclient.model.UiState
+import me.xiaozhi.androidclient.ui.DbMeter
+import me.xiaozhi.androidclient.ui.HoloHeader
 import me.xiaozhi.androidclient.ui.MainViewModel
+import me.xiaozhi.androidclient.ui.StarfieldBackground
 import me.xiaozhi.androidclient.ui.theme.XiaozhiClientTheme
 
 private enum class AppScreen { CHAT, SETTINGS }
@@ -104,11 +108,11 @@ private sealed interface PendingAudioAction {
     data object EnableWakeWord : PendingAudioAction
 }
 
-private val ChatBackground = Color(0xFFFAFAFA)
-private val SettingsBackground = Color(0xFFF5F5F5)
-private val UserBubble = Color(0xFF161616)
-private val AssistantBubble = Color.White
-private val HeaderTint = Color(0xFFFAFAFA)
+private val ChatBackground = Color(0xFF050510)
+private val SettingsBackground = Color(0xFF050510)
+private val UserBubble = Color(0xFF1E1E3A)
+private val AssistantBubble = Color(0xFF12122B)
+private val HeaderTint = Color(0xFF050510)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -291,6 +295,8 @@ private fun XiaozhiApp() {
         onMcpPayloadChanged = viewModel::updateMcpPayload,
         onWakeWordEnabledChanged = requestWakeWordEnable,
         onWakeWordsChanged = viewModel::updateWakeWords,
+        onVadThresholdChanged = viewModel::updateVadThreshold,
+        onOverlayEnabledChanged = viewModel::updateOverlayEnabled,
         onTermuxEnabledChanged = viewModel::updateTermuxEnabled,
         onPythonPathChanged = viewModel::updatePythonPath,
         onPythonScriptPathChanged = viewModel::updatePythonScriptPath,
@@ -331,6 +337,8 @@ private fun XiaozhiScreen(
     onMcpPayloadChanged: (String) -> Unit,
     onWakeWordEnabledChanged: (Boolean) -> Unit,
     onWakeWordsChanged: (String) -> Unit,
+    onVadThresholdChanged: (Double) -> Unit,
+    onOverlayEnabledChanged: (Boolean) -> Unit,
     onTermuxEnabledChanged: (Boolean) -> Unit,
     onPythonPathChanged: (String) -> Unit,
     onPythonScriptPathChanged: (String) -> Unit,
@@ -353,7 +361,7 @@ private fun XiaozhiScreen(
                             Icon(Icons.Default.ArrowBack, contentDescription = "Kembali ke Chat")
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF050510)),
                 )
             }
         },
@@ -388,6 +396,8 @@ private fun XiaozhiScreen(
                 onMcpPayloadChanged = onMcpPayloadChanged,
                 onWakeWordEnabledChanged = onWakeWordEnabledChanged,
                 onWakeWordsChanged = onWakeWordsChanged,
+                onVadThresholdChanged = onVadThresholdChanged,
+                onOverlayEnabledChanged = onOverlayEnabledChanged,
                 onTermuxEnabledChanged = onTermuxEnabledChanged,
                 onPythonPathChanged = onPythonPathChanged,
                 onPythonScriptPathChanged = onPythonScriptPathChanged,
@@ -430,33 +440,48 @@ private fun ChatScreen(
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        ChatHeaderCard(
-            state = state,
-            onOpenSettings = onOpenSettings,
-            onPickAssistantAvatar = onPickAssistantAvatar,
-        )
+        Box(modifier = Modifier.fillMaxSize()) {
+            StarfieldBackground()
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                HoloHeader(
+                    state = state,
+                    onOpenSettings = onOpenSettings,
+                )
 
-        if (state.activationPending) {
-            ActivationBanner(
-                activationCode = state.activationCode,
-                activationMessage = state.activationMessage,
-            )
+                // Grafik dB real-time (tampil saat merekam / siaga aktif)
+                if (state.wakeWordEnabled || state.isRecording) {
+                    DbMeter(
+                        micLevel = state.micLevel,
+                        thresholdLevel = ((state.vadThreshold - 300.0) / (3000.0 - 300.0)).toFloat(),
+                    )
+                }
+
+                if (state.activationPending) {
+                    ActivationBanner(
+                        activationCode = state.activationCode,
+                        activationMessage = state.activationMessage,
+                    )
+                }
+
+                ChatMessageList(
+                    messages = state.chatMessages,
+                    assistantAvatarPath = state.assistantAvatarPath,
+                    listState = listState,
+                    modifier = Modifier.weight(1f),
+                )
+
+                ComposerCard(
+                    state = state,
+                    onDraftChanged = onDraftChanged,
+                    onSendDraft = onSendDraft,
+                    onStartListening = onStartListening,
+                    onStopListening = onStopListening,
+                )
+            }
         }
-
-        ChatMessageList(
-            messages = state.chatMessages,
-            assistantAvatarPath = state.assistantAvatarPath,
-            listState = listState,
-            modifier = Modifier.weight(1f),
-        )
-
-        ComposerCard(
-            state = state,
-            onDraftChanged = onDraftChanged,
-            onSendDraft = onSendDraft,
-            onStartListening = onStartListening,
-            onStopListening = onStopListening,
-        )
     }
 }
 
@@ -479,6 +504,8 @@ private fun SettingsScreen(
     onMcpPayloadChanged: (String) -> Unit,
     onWakeWordEnabledChanged: (Boolean) -> Unit,
     onWakeWordsChanged: (String) -> Unit,
+    onVadThresholdChanged: (Double) -> Unit,
+    onOverlayEnabledChanged: (Boolean) -> Unit,
     onTermuxEnabledChanged: (Boolean) -> Unit,
     onPythonPathChanged: (String) -> Unit,
     onPythonScriptPathChanged: (String) -> Unit,
@@ -583,6 +610,46 @@ private fun SettingsScreen(
                 onValueChange = onWakeWordsChanged,
             )
             HorizontalDivider()
+            // Potensio sensitivitas VAD
+            Column(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = "🎚️ Sensitivitas Suara",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = "${state.vadThreshold.toInt()}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                Text(
+                    text = "Kecil = sensitif (bisikan ketangkap). Besar = kebal (hanya suara jelas).",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Slider(
+                    value = state.vadThreshold.toFloat(),
+                    onValueChange = { onVadThresholdChanged(it.toDouble()) },
+                    valueRange = 300f..3000f,
+                )
+            }
+            HorizontalDivider()
+            SettingsSwitch(
+                icon = "🫧",
+                title = "Orb Melayang",
+                subtitle = "Tampil di atas aplikasi lain (butuh izin overlay)",
+                checked = state.overlayEnabled,
+                onCheckedChange = onOverlayEnabledChanged,
+            )
+            HorizontalDivider()
             SettingsStatus(
                 icon = "🔊",
                 title = "Rute Audio Saat Ini",
@@ -612,7 +679,7 @@ private fun ChatHeaderCard(
     }
 
     Surface(
-        color = Color.White,
+        color = Color(0xFF12122B),
         shape = RoundedCornerShape(28.dp),
         shadowElevation = 2.dp,
     ) {
@@ -667,7 +734,7 @@ private fun ComposerCard(
     onStopListening: () -> Unit,
 ) {
     Surface(
-        color = Color.White,
+        color = Color(0xFF12122B),
         shape = RoundedCornerShape(30.dp),
         shadowElevation = 3.dp,
     ) {
@@ -931,7 +998,7 @@ private fun ActivationBanner(
 @Composable
 private fun SettingsSummaryCard(state: UiState) {
     Surface(
-        color = Color.White,
+        color = Color(0xFF12122B),
         shape = RoundedCornerShape(28.dp),
         shadowElevation = 2.dp,
     ) {
@@ -1043,7 +1110,7 @@ private fun SectionTitle(title: String) {
 @Composable
 private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
     Surface(
-        color = Color.White,
+        color = Color(0xFF12122B),
         shape = RoundedCornerShape(28.dp),
         shadowElevation = 1.dp,
     ) {
@@ -1363,7 +1430,7 @@ private fun StatusPill(
 @Composable
 private fun StatusTag(text: String) {
     Surface(
-        color = Color.White.copy(alpha = 0.9f),
+        color = Color(0xFF12122B).copy(alpha = 0.9f),
         shape = CircleShape,
     ) {
         Text(

@@ -53,7 +53,7 @@ private const val DEBUG_WAV_NAME = "last_tts.wav"
 private const val MAX_OPUS_PACKET_BYTES = 4096
 private const val AUTO_STOP_SILENCE_FRAMES = 12
 private const val AUTO_STOP_THRESHOLD = 700.0
-private const val DEFAULT_AUDIO_ROUTE = "媒体输出：扬声器 / 输入：机身麦克风"
+private const val DEFAULT_AUDIO_ROUTE = "Output: Speaker / Input: Mic HP"
 
 class XiaozhiAudioEngine(context: Context) {
     private val appContext = context.applicationContext
@@ -168,6 +168,10 @@ class XiaozhiAudioEngine(context: Context) {
         onAutoStop: () -> Unit,
         onRecordingChanged: (Boolean) -> Unit,
         onError: (String) -> Unit,
+        /** Dipanggil tiap frame dengan level RMS (untuk grafik dB). */
+        onLevelChanged: ((Double) -> Unit)? = null,
+        /** Ambang RMS sensitivitas VAD (dari potensio pengaturan). */
+        vadThreshold: Double = AUTO_STOP_THRESHOLD,
     ) {
         if (captureJob != null) {
             return
@@ -185,14 +189,14 @@ class XiaozhiAudioEngine(context: Context) {
                         setComplexity(8)
                     }
                 } catch (error: OpusException) {
-                    onError("创建 Opus 编码器失败：${error.message.orEmpty()}")
+                    onError("Gagal membuat encoder Opus: ${error.message.orEmpty()}")
                     captureJob = null
                     return@withLock
                 }
 
                 val audioRecord = createAudioRecord()
                 if (audioRecord == null) {
-                    onError("初始化麦克风失败")
+                    onError("Gagal menginisialisasi mikrofon")
                     captureJob = null
                     return@withLock
                 }
@@ -219,7 +223,7 @@ class XiaozhiAudioEngine(context: Context) {
                             AudioRecord.READ_BLOCKING,
                         )
                         if (readSamples <= 0) {
-                            onError("读取麦克风失败：$readSamples")
+                            onError("Gagal membaca mikrofon: $readSamples")
                             break
                         }
 
@@ -231,12 +235,15 @@ class XiaozhiAudioEngine(context: Context) {
 
                         if (mode == ListeningMode.AUTO) {
                             val rms = calculateRms(pcmFrame)
-                            if (rms >= AUTO_STOP_THRESHOLD) {
+                            onLevelChanged?.invoke(rms)
+                            if (rms >= vadThreshold) {
                                 speechDetected = true
                                 silenceFrames = 0
                             } else if (speechDetected) {
                                 silenceFrames += 1
                             }
+                        } else {
+                            onLevelChanged?.invoke(calculateRms(pcmFrame))
                         }
 
                         val encodedSize = encoder.encode(
@@ -250,7 +257,7 @@ class XiaozhiAudioEngine(context: Context) {
                         if (encodedSize > 0) {
                             val sent = onEncodedFrame(encodedBuffer.copyOf(encodedSize))
                             if (!sent) {
-                                onError("发送编码后的音频帧失败")
+                                onError("Gagal mengirim frame audio")
                                 break
                             }
                         }
@@ -261,7 +268,7 @@ class XiaozhiAudioEngine(context: Context) {
                         }
                     }
                 } catch (error: Exception) {
-                    onError("录音失败：${error.message.orEmpty()}")
+                    onError("Rekaman gagal: ${error.message.orEmpty()}")
                 } finally {
                     releaseAudioEffects()
                     try {
@@ -351,7 +358,7 @@ class XiaozhiAudioEngine(context: Context) {
                         onPlaybackChanged(true)
                     }
                 } catch (error: Exception) {
-                    onError("音频播放失败：${error.message.orEmpty()}")
+                    onError("Gagal memutar audio: ${error.message.orEmpty()}")
                     releasePlaybackLocked()
                 }
             }
@@ -525,7 +532,7 @@ class XiaozhiAudioEngine(context: Context) {
 
     private fun refreshAudioRouteStatus() {
         publishRouteStatus(
-            "媒体输出：${describeOutputDevice(findPreferredOutputDevice())} / 输入：${describeInputDevice(findPreferredInputDevice())}",
+            "Output: ${describeOutputDevice(findPreferredOutputDevice())} / Input: ${describeInputDevice(findPreferredInputDevice())}",
         )
     }
 
@@ -556,24 +563,24 @@ class XiaozhiAudioEngine(context: Context) {
 
     private fun describeOutputDevice(device: AudioDeviceInfo?): String {
         return when {
-            device == null -> "扬声器"
-            isBluetoothMediaOutputDevice(device) -> "蓝牙耳机"
-            device.type == AudioDeviceInfo.TYPE_USB_HEADSET -> "USB 耳机"
-            isWiredOutputDevice(device) -> "有线耳机"
-            device.type == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> "听筒"
-            isSpeakerDevice(device) -> "扬声器"
-            else -> "扬声器"
+            device == null -> "Speaker"
+            isBluetoothMediaOutputDevice(device) -> "Headset Bluetooth"
+            device.type == AudioDeviceInfo.TYPE_USB_HEADSET -> "Headset USB"
+            isWiredOutputDevice(device) -> "Headset kabel"
+            device.type == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> "Earpiece"
+            isSpeakerDevice(device) -> "Speaker"
+            else -> "Speaker"
         }
     }
 
     private fun describeInputDevice(device: AudioDeviceInfo?): String {
         return when {
-            device == null -> "机身麦克风"
-            isBluetoothInputDevice(device) -> "蓝牙麦克风"
-            device.type == AudioDeviceInfo.TYPE_USB_HEADSET -> "USB 麦克风"
-            isWiredInputDevice(device) -> "耳机麦克风"
-            device.type == AudioDeviceInfo.TYPE_BUILTIN_MIC -> "机身麦克风"
-            else -> "机身麦克风"
+            device == null -> "Mic HP"
+            isBluetoothInputDevice(device) -> "Mic Bluetooth"
+            device.type == AudioDeviceInfo.TYPE_USB_HEADSET -> "Mic USB"
+            isWiredInputDevice(device) -> "Mic headset"
+            device.type == AudioDeviceInfo.TYPE_BUILTIN_MIC -> "Mic HP"
+            else -> "Mic HP"
         }
     }
 

@@ -33,18 +33,18 @@ class TermuxRunner(private val context: Context) {
 
     fun statusLabel(enabled: Boolean): String {
         return when {
-            !enabled -> "未启用"
-            !isAvailable() -> "未安装 Termux"
-            else -> "已安装，需要在 Termux 打开 allow-external-apps"
+            !enabled -> "Nonaktif"
+            !isAvailable() -> "Termux belum terinstall"
+            else -> "Terinstall, aktifkan allow-external-apps di Termux"
         }
     }
 
     fun termuxApiStatusLabel(enabled: Boolean): String {
         return when {
-            !enabled -> "未启用"
-            !isAvailable() -> "未安装 Termux"
-            !isTermuxApiAvailable() -> "缺少 Termux:API 应用"
-            else -> "可调用 termux-api 命令"
+            !enabled -> "Nonaktif"
+            !isAvailable() -> "Termux belum terinstall"
+            !isTermuxApiAvailable() -> "Aplikasi Termux:API tidak ada"
+            else -> "Bisa memanggil perintah termux-api"
         }
     }
 
@@ -55,7 +55,7 @@ class TermuxRunner(private val context: Context) {
     ): Result<String> {
         val normalizedScript = scriptPath.trim()
         if (normalizedScript.isBlank()) {
-            return Result.failure(IllegalArgumentException("Python 脚本路径不能为空"))
+            return Result.failure(IllegalArgumentException("Path script Python tidak boleh kosong"))
         }
         return runCommand(
             commandPath = pythonPath.trim(),
@@ -72,7 +72,7 @@ class TermuxRunner(private val context: Context) {
     ): Result<String> {
         val normalizedCommand = commandPath.trim()
         if (normalizedCommand.isBlank()) {
-            return Result.failure(IllegalArgumentException("termux-api 命令路径不能为空"))
+            return Result.failure(IllegalArgumentException("Path perintah termux-api tidak boleh kosong"))
         }
         return runCommand(
             commandPath = normalizedCommand,
@@ -89,10 +89,10 @@ class TermuxRunner(private val context: Context) {
         label: String,
     ): Result<String> = runCatching {
         if (!isAvailable()) {
-            error("未安装 Termux")
+            error("Termux belum terinstall")
         }
         if (commandPath.isBlank()) {
-            error("命令路径不能为空")
+            error("Path perintah tidak boleh kosong")
         }
 
         val resultIntent = Intent(context, TermuxResultService::class.java)
@@ -120,7 +120,7 @@ class TermuxRunner(private val context: Context) {
         }
 
         ContextCompat.startForegroundService(context, intent)
-        "已请求 Termux 执行：$label"
+        "Meminta Termux menjalankan: $label"
     }
 
     private fun tokenizeArguments(raw: String): List<String> {

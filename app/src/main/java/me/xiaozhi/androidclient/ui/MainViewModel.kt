@@ -37,9 +37,9 @@ import org.json.JSONObject
 
 private const val APP_VERSION = "0.3.0"
 private const val LOG_TAG = "XiaozhiClient"
-private const val UNBURNED_SERIAL_NUMBER = "未烧录"
-private const val WAKE_WORD_DISABLED = "未启用"
-private const val WAKE_WORD_STANDBY = "待命中"
+private const val UNBURNED_SERIAL_NUMBER = "Belum di-flash"
+private const val WAKE_WORD_DISABLED = "Nonaktif"
+private const val WAKE_WORD_STANDBY = "Siaga"
 private const val DEFAULT_AUDIO_ROUTE = "Output: Speaker / Input: Mikrofon"
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -60,6 +60,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val pendingTextPrompts = ArrayDeque<String>()
     /** True jika turn saat ini dipicu deteksi suara (perlu verifikasi kata kunci di transkrip). */
     @Volatile private var isWakeTurn = false
+    /** Job jendela follow-up 8 detik setelah TTS selesai. */
+    private var followUpJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * Buka jendela follow-up: setelah asisten selesai bicara, mic tetap
+     * terbuka 8 detik agar pengguna bisa bertanya lanjutan TANPA kata kunci.
+     * Jika tidak ada ucapan dalam 8 detik, kembali siaga.
+     */
+    private fun startFollowUpWindow() {
+        followUpJob?.cancel()
+        followUpJob = null
+        val state = uiState.value
+        if (!state.wakeWordEnabled) return
+        if (state.connectionStatus != ConnectionStatus.CONNECTED) return
+        if (state.isRecording || state.isAssistantSpeaking) return
+        startListening(ListeningMode.AUTO)
+        followUpJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(8_000)
+            if (!uiState.value.isAssistantSpeaking && uiState.value.isRecording) {
+                stopListening()
+                addLog("Jendela follow-up habis — kembali siaga")
+            }
+        }
+    }
 
     private val _uiState = MutableStateFlow(loadInitialState())
     val uiState = _uiState.asStateFlow()
@@ -78,7 +102,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             TermuxCommandEvents.events.collect(::handleTermuxCommandResult)
         }
         addLog("Klien siap")
-        addLog("当前使用未烧录设备接入模式")
+        addLog("Menggunakan mode perangkat belum di-flash")
     }
 
     fun updateOtaUrl(value: String) = updateAndPersist { copy(otaUrl = value) }
@@ -106,13 +130,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val resolver = getApplication<Application>().contentResolver
             resolver.openInputStream(uri)?.use { input ->
                 targetFile.outputStream().use { output -> input.copyTo(output) }
-            } ?: error("无法读取所选图片")
+            } ?: error("Tidak bisa membaca gambar yang dipilih")
             targetFile.absolutePath
         }.onSuccess { path ->
             updateAndPersist { copy(assistantAvatarPath = path) }
-            addLog("已更新小智头像")
+            addLog("Avatar diperbarui")
         }.onFailure { error ->
-            addLog("更新头像失败：${error.message.orEmpty()}")
+            addLog("Gagal memperbarui avatar: ${error.message.orEmpty()}")
         }
     }
 
@@ -191,6 +215,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Potensio sensitivitas VAD (ambang RMS). */
+    fun updateVadThreshold(value: Double) = updateAndPersist { copy(vadThreshold = value) }
+
+    /** Overlay orb mengambang. */
+    fun updateOverlayEnabled(enabled: Boolean) = updateAndPersist { copy(overlayEnabled = enabled) }.also {
+        val app = getApplication<Application>()
+        if (enabled) {
+            me.xiaozhi.androidclient.HoloOrbService.start(app)
+        } else {
+            me.xiaozhi.androidclient.HoloOrbService.stop(app)
+        }
+    }
+
+    /** Status orb untuk UI hologram. */
+    fun orbStatus(): me.xiaozhi.androidclient.ui.theme.OrbStatus {
+        val s = uiState.value
+        return when {
+            s.isAssistantSpeaking -> me.xiaozhi.androidclient.ui.theme.OrbStatus.SPEAKING
+            s.isRecording -> me.xiaozhi.androidclient.ui.theme.OrbStatus.LISTENING
+            s.isTurnActive -> me.xiaozhi.androidclient.ui.theme.OrbStatus.THINKING
+            s.wakeWordEnabled -> me.xiaozhi.androidclient.ui.theme.OrbStatus.STANDBY
+            else -> me.xiaozhi.androidclient.ui.theme.OrbStatus.IDLE
+        }
+    }
+
     fun updateTermuxEnabled(enabled: Boolean) {
         updateAndPersist {
             copy(
@@ -199,7 +248,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 termuxApiStatus = termuxRunner.termuxApiStatusLabel(enabled),
             )
         }
-        addLog(if (enabled) "已启用 Python/MCP 运行入口" else "已关闭 Python/MCP 运行入口")
+        addLog(if (enabled) "Python/MCP diaktifkan" else "Python/MCP dinonaktifkan")
     }
 
     fun updatePythonPath(value: String) = updateAndPersist { copy(pythonPath = value) }
@@ -218,7 +267,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             wavDumpEnabled = uiState.value.debugWavDumpEnabled,
         )
         updateAndPersist { copy(debugLoggingEnabled = enabled) }
-        addLog(if (enabled) "已开启调试日志" else "已关闭调试日志")
+        addLog(if (enabled) "Log debug diaktifkan" else "Log debug dinonaktifkan")
     }
 
     fun updateDebugWavDumpEnabled(enabled: Boolean) {
@@ -227,7 +276,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             wavDumpEnabled = enabled,
         )
         updateAndPersist { copy(debugWavDumpEnabled = enabled) }
-        addLog(if (enabled) "已开启 TTS 音频导出" else "已关闭 TTS 音频导出")
+        addLog(if (enabled) "Ekspor audio TTS diaktifkan" else "Ekspor audio TTS dinonaktifkan")
     }
 
     fun updateWakeWordStatus(status: String) {
@@ -254,7 +303,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             addLog(message)
         }.onFailure { error ->
             refreshPythonRuntimeStatus()
-            addLog("启动 Python 失败：${error.message.orEmpty()}")
+            addLog("Gagal menjalankan Python: ${error.message.orEmpty()}")
         }
     }
 
@@ -269,7 +318,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             addLog(message)
         }.onFailure { error ->
             refreshPythonRuntimeStatus()
-            addLog("璋冪敤 termux-api 澶辫触锛?{error.message.orEmpty()}")
+            addLog("Gagal memanggil termux-api: {error.message.orEmpty()}")
         }
     }
 
@@ -278,17 +327,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val previous = uiState.value.audioRouteStatus
         updateState { copy(audioRouteStatus = normalized) }
         if (previous != normalized) {
-            addLog("音频路由更新：$normalized")
+            addLog("Rute audio diperbarui: $normalized")
         }
     }
 
     fun onMicrophonePermissionDenied(reason: String) {
-        addLog("录音权限被拒绝：$reason")
+        addLog("Izin rekam ditolak: $reason")
         if (reason == "wake_word") {
             updateState {
                 copy(
                     wakeWordEnabled = false,
-                    wakeWordStatus = "需要麦克风权限",
+                    wakeWordStatus = "Butuh izin mikrofon",
                 )
             }
             persist()
@@ -304,7 +353,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 activationPending = false,
             )
         }
-        addLog("正在获取官方配置：${state.otaUrl}")
+        addLog("Mengambil konfigurasi resmi: ${state.otaUrl}")
 
         viewModelScope.launch {
             otaConfigService.fetchConfig(
@@ -337,17 +386,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 if (websocketConfig != null) {
-                    addLog("已收到 WebSocket 配置：${websocketConfig.url}")
+                    addLog("Konfigurasi WebSocket diterima: ${websocketConfig.url}")
                 } else {
                     addLog("OTA tidak mengembalikan konfigurasi WebSocket")
                 }
 
                 if (result.activation != null && websocketConfig == null) {
-                    addLog("需要激活设备：${result.activation.code.orEmpty()}")
+                    addLog("Perlu aktivasi perangkat: ${result.activation.code.orEmpty()}")
                     if (result.activation.challenge.isNullOrBlank()) {
-                        addLog("请先去 xiaozhi.me 完成激活，然后重新获取配置")
+                        addLog("Selesaikan aktivasi di xiaozhi.me dulu, lalu ambil konfigurasi lagi")
                     } else {
-                        addLog("服务端要求 challenge 激活，但 Android 没有烧录 HMAC 密钥")
+                        addLog("Server meminta aktivasi challenge, tapi Android tidak punya kunci HMAC")
                     }
                 }
 
@@ -358,7 +407,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }.onFailure { error ->
                 updateState { copy(connectionStatus = ConnectionStatus.FAILED) }
-                addLog("获取 OTA 配置失败：${error.message.orEmpty()}")
+                addLog("Gagal mengambil konfigurasi OTA: ${error.message.orEmpty()}")
             }
         }
     }
@@ -366,21 +415,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun retryActivation() {
         val activationInfo = pendingActivationInfo
         if (activationInfo == null) {
-            addLog("当前没有待处理的激活信息")
+            addLog("Tidak ada info aktivasi yang tertunda")
             return
         }
         if (activationInfo.challenge.isNullOrBlank()) {
-            addLog("正在重新获取 OTA 配置")
+            addLog("Mengambil ulang konfigurasi OTA")
             fetchOfficialConfig()
             return
         }
-        addLog("challenge 激活需要已烧录的序列号和 HMAC，Android 客户端不可用")
+        addLog("Aktivasi challenge butuh serial & HMAC yang sudah di-flash, tidak tersedia di klien Android")
     }
 
     fun connect() {
         val state = uiState.value
         if (state.connectionStatus == ConnectionStatus.CONNECTING) {
-            addLog("连接正在进行中")
+            addLog("Koneksi sedang berjalan")
             return
         }
         if (state.connectionStatus == ConnectionStatus.CONNECTED) {
@@ -400,7 +449,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         if (state.activationPending) {
-            addLog("设备还没有完成激活")
+            addLog("Perangkat belum selesai diaktivasi")
             return
         }
 
@@ -418,7 +467,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 isTurnActive = false,
             )
         }
-        addLog("正在连接：${state.websocketUrl}")
+        addLog("Menghubungkan: ${state.websocketUrl}")
 
         viewModelScope.launch {
             realtimeClient.connect(
@@ -431,7 +480,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 ),
             ).onFailure { error ->
                 updateState { copy(connectionStatus = ConnectionStatus.FAILED) }
-                addLog("连接失败：${error.message.orEmpty()}")
+                addLog("Koneksi gagal: ${error.message.orEmpty()}")
             }
         }
     }
@@ -439,7 +488,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun disconnect() {
         clearPendingConversation()
         realtimeClient.disconnect()
-        finishListening(sendStop = false, stopCapture = true, keepTurnActive = false, reason = "已断开连接")
+        finishListening(sendStop = false, stopCapture = true, keepTurnActive = false, reason = "Terputus")
         audioEngine.clearPlayback {
             updateState { copy(isAssistantSpeaking = it) }
         }
@@ -455,13 +504,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun startListening(mode: ListeningMode) {
         if (uiState.value.connectionStatus != ConnectionStatus.CONNECTED) {
-            addLog("请先连接服务端")
+            addLog("Hubungkan ke server dulu")
             pendingListeningMode = mode
-            ensureReadyForConversation(trigger = "录音")
+            ensureReadyForConversation(trigger = "Rekaman")
             return
         }
         if (audioEngine.isCapturing()) {
-            addLog("录音已经在进行中")
+            addLog("Rekaman sudah berjalan")
             return
         }
 
@@ -482,7 +531,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     sendStop = true,
                     stopCapture = false,
                     keepTurnActive = true,
-                    reason = "自动模式检测到静音，已停止录音",
+                    reason = "Mode otomatis mendeteksi diam, rekaman dihentikan",
                 )
             },
             onRecordingChanged = { isRecording ->
@@ -509,8 +558,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
             },
+            onLevelChanged = { rms ->
+                // Normalisasi RMS ke 0..1 untuk grafik dB (logaritmik kasar).
+                val level = (kotlin.math.ln(1 + rms / 300.0) / kotlin.math.ln(1 + 8000.0 / 300.0)).toFloat()
+                    .coerceIn(0f, 1f)
+                updateState { copy(micLevel = level) }
+            },
+            vadThreshold = uiState.value.vadThreshold,
         )
-        addLog("已开始录音：${mode.wireValue}")
+        addLog("Mulai merekam: ${mode.wireValue}")
     }
 
     fun stopListening() {
@@ -521,7 +577,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun abortSpeaking() {
         clearPendingConversation()
-        finishListening(sendStop = false, stopCapture = true, keepTurnActive = false, reason = "已请求打断")
+        finishListening(sendStop = false, stopCapture = true, keepTurnActive = false, reason = "Interupsi diminta")
         me.xiaozhi.androidclient.XiaozhiVoiceService.resumeListening(getApplication())
         audioEngine.clearPlayback {
             updateState { copy(isAssistantSpeaking = it) }
@@ -542,7 +598,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         pendingTextPrompts.addLast(prompt)
         updateState { copy(isTurnActive = true) }
         addLog("Menyiapkan pesan teks")
-        ensureReadyForConversation(trigger = "文字消息")
+        ensureReadyForConversation(trigger = "Pesan teks")
     }
 
     fun sendMcp() {
@@ -553,7 +609,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearLogs() {
         updateState { copy(logs = emptyList()) }
-        addLog("日志已清空")
+        addLog("Log dibersihkan")
     }
 
     override fun onCleared() {
@@ -568,6 +624,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         keepTurnActive: Boolean,
         reason: String,
     ) {
+        // Turn selesai (pengguna sudah bicara) → tutup jendela follow-up lama;
+        // jendela baru dibuka lagi setelah TTS berikutnya selesai.
+        followUpJob?.cancel()
+        followUpJob = null
         if (stopCapture) {
             viewModelScope.launch {
                 audioEngine.stopCapture()
@@ -618,7 +678,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 audioEngine.playOpusFrame(
                     opusFrame = event.payload,
                     onPlaybackChanged = { isPlaying ->
+                        val wasSpeaking = uiState.value.isAssistantSpeaking
                         updateState { copy(isAssistantSpeaking = isPlaying) }
+                        if (wasSpeaking && !isPlaying) {
+                            // TTS selesai → buka jendela follow-up 8 detik
+                            startFollowUpWindow()
+                        }
                     },
                     onError = ::addLog,
                 )
@@ -637,7 +702,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         isTurnActive = false,
                     )
                 }
-                addLog("Socket 已关闭：${event.code} ${event.reason}")
+                addLog("Socket ditutup: ${event.code} ${event.reason}")
             }
 
             is XiaozhiRealtimeClient.RealtimeEvent.Error -> {
@@ -683,9 +748,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         stopCapture = true,
                         keepTurnActive = true,
                         reason = if (isBluetoothMicActive()) {
-                            "检测到蓝牙麦克风占用，播报前已释放录音以恢复媒体音质"
+                            "Mic Bluetooth sedang dipakai, rekaman dilepas sebelum pemutaran agar kualitas audio kembali"
                         } else {
-                            "服务端开始播报，已结束本地录音"
+                            "Server mulai berbicara, rekaman lokal dihentikan"
                         },
                     )
                 }
@@ -706,7 +771,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             isTurnActive = false,
                         )
                     }
-                    addLog("播报完成")
+                    addLog("Pemutaran selesai")
                 }
             }
         }
@@ -772,7 +837,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return
             }
             pendingTextPrompts.removeFirst()
-            addLog("文字消息已发送")
+            addLog("Pesan teks terkirim")
         }
 
         pendingListeningMode?.let(::startListening)
@@ -804,7 +869,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun isBluetoothMicActive(): Boolean {
-        return uiState.value.audioRouteStatus.contains("蓝牙麦克风")
+        return uiState.value.audioRouteStatus.contains("Mic Bluetooth")
     }
 
     private fun addChatMessage(role: ChatRole, text: String) {
@@ -838,7 +903,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val label = result.label.ifBlank { "Termux" }
         val exitCode = result.exitCode?.toString() ?: "?"
         val errorCode = result.errorCode?.let { ", err=$it" }.orEmpty()
-        addLog("$label 缁撴潫锛宔xit=$exitCode$errorCode")
+        addLog("$label  selesai, exit=$exitCode$errorCode")
         if (result.stdout.isNotBlank()) {
             addLog("$label stdout: ${result.stdout.trim()}")
         }
@@ -875,6 +940,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             termuxApiStatus = termuxRunner.termuxApiStatusLabel(storedConfig.termuxEnabled),
             debugLoggingEnabled = storedConfig.debugLoggingEnabled,
             debugWavDumpEnabled = storedConfig.debugWavDumpEnabled,
+            vadThreshold = storedConfig.vadThreshold,
+            overlayEnabled = storedConfig.overlayEnabled,
         )
     }
 
@@ -899,6 +966,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 termuxApiArguments = uiState.value.termuxApiArguments,
                 debugLoggingEnabled = uiState.value.debugLoggingEnabled,
                 debugWavDumpEnabled = uiState.value.debugWavDumpEnabled,
+                vadThreshold = uiState.value.vadThreshold,
+                overlayEnabled = uiState.value.overlayEnabled,
             ),
         )
     }

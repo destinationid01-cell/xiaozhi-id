@@ -97,7 +97,7 @@ data class UiState(
     val lastIncomingType: String = "",
     val lastSttText: String = "",
     val lastTtsText: String = "",
-    val audioRouteStatus: String = "媒体输出：扬声器 / 输入：机身麦克风",
+    val audioRouteStatus: String = "Output: Speaker / Input: Mic HP",
     val isRecording: Boolean = false,
     val isAssistantSpeaking: Boolean = false,
     val isTurnActive: Boolean = false,
@@ -105,6 +105,12 @@ data class UiState(
     val wakeWordEnabled: Boolean = false,
     val wakeWords: String = "",
     val wakeWordStatus: String = "",
+    /** Level mic 0.0–1.0 (normalisasi RMS) untuk grafik dB & orb. */
+    val micLevel: Float = 0f,
+    /** Ambang RMS sensitivitas VAD (potensio pengaturan, default 700). */
+    val vadThreshold: Double = 700.0,
+    /** Overlay orb mengambang aktif. */
+    val overlayEnabled: Boolean = false,
     val termuxEnabled: Boolean = false,
     val pythonPath: String = "",
     val pythonScriptPath: String = "",

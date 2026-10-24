@@ -76,12 +76,12 @@ class XiaozhiRealtimeClient(private val okHttpClient: OkHttpClient) {
         webSocket = null
         sessionId = null
         if (notify) {
-            emit(RealtimeEvent.Log("已断开连接"))
+            emit(RealtimeEvent.Log("Terputus"))
         }
     }
 
     fun sendStartListening(mode: ListeningMode): Boolean {
-        val sid = sessionId ?: return failSend("服务端会话尚未建立，无法开始录音")
+        val sid = sessionId ?: return failSend("Sesi server belum dibuat, tidak bisa mulai merekam")
         return sendJson(
             JSONObject()
                 .put("session_id", sid)
@@ -93,7 +93,7 @@ class XiaozhiRealtimeClient(private val okHttpClient: OkHttpClient) {
     }
 
     fun sendStopListening(): Boolean {
-        val sid = sessionId ?: return failSend("服务端会话尚未建立，无法停止录音")
+        val sid = sessionId ?: return failSend("Sesi server belum dibuat, tidak bisa berhenti merekam")
         return sendJson(
             JSONObject()
                 .put("session_id", sid)
@@ -104,10 +104,10 @@ class XiaozhiRealtimeClient(private val okHttpClient: OkHttpClient) {
     }
 
     fun sendDetectText(text: String): Boolean {
-        val sid = sessionId ?: return failSend("服务端会话尚未建立，无法发送文字")
+        val sid = sessionId ?: return failSend("Sesi server belum dibuat, tidak bisa mengirim teks")
         val prompt = text.trim()
         if (prompt.isBlank()) {
-            return failSend("文字内容不能为空")
+            return failSend("Teks tidak boleh kosong")
         }
         return sendJson(
             JSONObject()
@@ -120,7 +120,7 @@ class XiaozhiRealtimeClient(private val okHttpClient: OkHttpClient) {
     }
 
     fun sendAbort(reason: String = "user_abort"): Boolean {
-        val sid = sessionId ?: return failSend("服务端会话尚未建立，无法打断")
+        val sid = sessionId ?: return failSend("Sesi server belum dibuat, tidak bisa menginterupsi")
         return sendJson(
             JSONObject()
                 .put("session_id", sid)
@@ -131,11 +131,11 @@ class XiaozhiRealtimeClient(private val okHttpClient: OkHttpClient) {
     }
 
     fun sendMcp(payloadText: String): Boolean {
-        val sid = sessionId ?: return failSend("服务端会话尚未建立，无法发送 MCP 请求")
+        val sid = sessionId ?: return failSend("Sesi server belum dibuat, tidak bisa mengirim permintaan MCP")
         val payload = try {
             JSONObject(payloadText)
         } catch (_: JSONException) {
-            return failSend("MCP 负载必须是 JSON 对象")
+            return failSend("Payload MCP harus objek JSON")
         }
 
         return sendJson(
@@ -148,13 +148,13 @@ class XiaozhiRealtimeClient(private val okHttpClient: OkHttpClient) {
     }
 
     fun sendAudioFrame(opusFrame: ByteArray): Boolean {
-        val socket = webSocket ?: return failSend("WebSocket 尚未连接")
+        val socket = webSocket ?: return failSend("WebSocket belum terhubung")
         val payload = wrapAudioPayload(opusFrame)
         val success = socket.send(payload.toByteString())
         if (success) {
             emit(RealtimeEvent.Log("=> [audio] ${payload.size} bytes"))
         } else {
-            emit(RealtimeEvent.Error("发送音频帧失败"))
+            emit(RealtimeEvent.Error("Gagal mengirim frame audio"))
         }
         return success
     }
@@ -162,7 +162,7 @@ class XiaozhiRealtimeClient(private val okHttpClient: OkHttpClient) {
     private fun socketListener(): WebSocketListener {
         return object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                emit(RealtimeEvent.Log("WebSocket 已打开: ${response.code}"))
+                emit(RealtimeEvent.Log("WebSocket terbuka: ${response.code}"))
                 sendHello()
             }
 
@@ -175,7 +175,7 @@ class XiaozhiRealtimeClient(private val okHttpClient: OkHttpClient) {
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                emit(RealtimeEvent.Log("WebSocket 正在关闭: $code $reason"))
+                emit(RealtimeEvent.Log("WebSocket sedang ditutup: $code $reason"))
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
@@ -189,7 +189,7 @@ class XiaozhiRealtimeClient(private val okHttpClient: OkHttpClient) {
                 }
                 sessionId = null
                 val responseCode = response?.code?.toString() ?: "no-response"
-                emit(RealtimeEvent.Error("WebSocket 失败: $responseCode ${t.message.orEmpty()}"))
+                emit(RealtimeEvent.Error("WebSocket gagal: $responseCode ${t.message.orEmpty()}"))
             }
         }
     }
@@ -201,11 +201,11 @@ class XiaozhiRealtimeClient(private val okHttpClient: OkHttpClient) {
             if (type == "hello") {
                 val transport = root.optString("transport")
                 if (transport != "websocket") {
-                    val error = IOException("不支持的传输类型: $transport")
+                    val error = IOException("Tipe transport tidak didukung: $transport")
                     if (!handshakeDeferred.isCompleted) {
                         handshakeDeferred.completeExceptionally(error)
                     }
-                    emit(RealtimeEvent.Error(error.message ?: "不支持的传输类型"))
+                    emit(RealtimeEvent.Error(error.message ?: "Tipe transport tidak didukung"))
                     return
                 }
 
@@ -221,19 +221,19 @@ class XiaozhiRealtimeClient(private val okHttpClient: OkHttpClient) {
                     handshakeDeferred.complete(hello)
                 }
                 emit(RealtimeEvent.Connected(hello))
-                emit(RealtimeEvent.Log("握手完成，session_id=${sessionId ?: "<none>"}"))
+                emit(RealtimeEvent.Log("Handshake selesai, session_id=${sessionId ?: "<none>"}"))
                 return
             }
 
             emit(RealtimeEvent.JsonMessage(type, text))
         } catch (error: JSONException) {
-            emit(RealtimeEvent.Error("服务端返回了无效 JSON: ${error.message}"))
+            emit(RealtimeEvent.Error("Server mengembalikan JSON tidak valid: ${error.message}"))
         }
     }
 
     private fun handleBinaryMessage(rawBytes: ByteArray) {
         val payload = unwrapAudioPayload(rawBytes) ?: run {
-            emit(RealtimeEvent.Error("解析音频二进制包失败"))
+            emit(RealtimeEvent.Error("Gagal mengurai paket audio biner"))
             return
         }
         emit(RealtimeEvent.BinaryMessage(payload = payload, size = payload.size))
@@ -260,13 +260,13 @@ class XiaozhiRealtimeClient(private val okHttpClient: OkHttpClient) {
     }
 
     private fun sendJson(payload: JSONObject, label: String): Boolean {
-        val socket = webSocket ?: return failSend("WebSocket 尚未连接")
+        val socket = webSocket ?: return failSend("WebSocket belum terhubung")
         val raw = payload.toString()
         val success = socket.send(raw)
         if (success) {
             emit(RealtimeEvent.Log("=> [$label] $raw"))
         } else {
-            emit(RealtimeEvent.Error("发送 $label 失败"))
+            emit(RealtimeEvent.Error("Mengirim $label gagal"))
         }
         return success
     }
