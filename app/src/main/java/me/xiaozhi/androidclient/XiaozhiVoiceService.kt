@@ -75,14 +75,15 @@ class XiaozhiVoiceService : Service() {
                         .setPackage(packageName)
                         .putExtra(EXTRA_PHRASE, phrase)
                 )
+                updateNotification("Terdeteksi: $phrase — memulai percakapan…")
                 // Mulai lagi mendengarkan setelah jeda (sesi percakapan ditangani activity)
                 scope.launch {
                     kotlinx.coroutines.delay(3_000)
                     wakeRecognizer?.start(AppPreferences(this@XiaozhiVoiceService).load().wakeWords)
                 }
             },
-            onStatusChanged = { /* status tampil di notifikasi bila perlu */ },
-            onError = { /* log saja */ },
+            onStatusChanged = { status -> updateNotification(status) },
+            onError = { error -> updateNotification("Error: $error") },
         ).also { it.start(wakeWords) }
     }
 
@@ -116,6 +117,30 @@ class XiaozhiVoiceService : Service() {
             setShowBadge(false)
         }
         manager.createNotificationChannel(channel)
+    }
+
+    private fun updateNotification(text: String) {
+        val manager = getSystemService(NotificationManager::class.java) ?: return
+        val openIntent = PendingIntent.getActivity(
+            this, 0,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val stopIntent = PendingIntent.getService(
+            this, 1,
+            Intent(this, XiaozhiVoiceService::class.java).setAction(ACTION_STOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notification: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("XiaoZhi siaga")
+            .setContentText(text)
+            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+            .setContentIntent(openIntent)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Matikan", stopIntent)
+            .setOngoing(true)
+            .setSilent(true)
+            .build()
+        manager.notify(NOTIFICATION_ID, notification)
     }
 
     private fun startForegroundWithType() {

@@ -181,7 +181,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .any { normalized.contains(it) }
     }
 
-    fun updateWakeWords(value: String) = updateAndPersist { copy(wakeWords = value) }
+    fun updateWakeWords(value: String) = updateAndPersist { copy(wakeWords = value) }.also {
+        // Service membaca kata kunci saat pertama nyala — restart agar pakai yang baru.
+        if (uiState.value.wakeWordEnabled) {
+            val app = getApplication<Application>()
+            me.xiaozhi.androidclient.XiaozhiVoiceService.stop(app)
+            me.xiaozhi.androidclient.XiaozhiVoiceService.start(app)
+            addLog("Kata kunci diubah — service siaga di-restart")
+        }
+    }
 
     fun updateTermuxEnabled(enabled: Boolean) {
         updateAndPersist {
