@@ -140,6 +140,7 @@ class WakeWordRecognizer(
             recognizer.cancel()
             recognizer.startListening(buildIntent())
         } catch (error: Exception) {
+            unmute() // Gagal mulai (mis. mic sibuk dipakai sesi) — jangan biarkan mute nyangkut
             onError("Gagal memulai pendengar kata kunci: ${error.message.orEmpty()}")
             scheduleRestart(BUSY_RESTART_DELAY_MS)
         }
@@ -262,8 +263,11 @@ class WakeWordRecognizer(
 
                 SpeechRecognizer.ERROR_RECOGNIZER_BUSY,
                 SpeechRecognizer.ERROR_CLIENT -> {
+                    // Mic kemungkinan dipakai sesi xiaozhi — unmute agar TTS terdengar,
+                    // dan tunda retry lebih lama (sesi mungkin masih berjalan).
+                    unmute()
                     publishStatus("Layanan sibuk, mencoba lagi…")
-                    scheduleRestart(BUSY_RESTART_DELAY_MS)
+                    scheduleRestart(5_000L)
                 }
 
                 SpeechRecognizer.ERROR_NETWORK,

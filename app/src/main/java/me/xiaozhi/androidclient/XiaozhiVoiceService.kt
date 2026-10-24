@@ -39,6 +39,8 @@ class XiaozhiVoiceService : Service() {
         const val ACTION_START = "me.xiaozhi.androidclient.action.START_STANDBY"
         const val ACTION_STOP = "me.xiaozhi.androidclient.action.STOP_STANDBY"
         const val ACTION_WAKE_WORD = "me.xiaozhi.androidclient.action.WAKE_WORD_DETECTED"
+        const val ACTION_PAUSE = "me.xiaozhi.androidclient.action.PAUSE_LISTENING"
+        const val ACTION_RESUME = "me.xiaozhi.androidclient.action.RESUME_LISTENING"
         const val EXTRA_PHRASE = "phrase"
 
         fun start(context: Context) {
@@ -53,10 +55,52 @@ class XiaozhiVoiceService : Service() {
         fun stop(context: Context) {
             context.stopService(Intent(context, XiaozhiVoiceService::class.java))
         }
+
+        fun pauseListening(context: Context) {
+            context.sendBroadcast(Intent(ACTION_PAUSE).setPackage(context.packageName))
+        }
+
+        fun resumeListening(context: Context) {
+            context.sendBroadcast(Intent(ACTION_RESUME).setPackage(context.packageName))
+        }
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var wakeRecognizer: WakeWordRecognizer? = null
+    private var resumeJob: kotlinx.coroutines.Job? = null
+
+    private val controlReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(ctx: Context?, intent: Intent?) {
+            when (intent?.action) {
+                ACTION_PAUSE -> pauseRecognizer()
+                ACTION_RESUME -> resumeRecognizer()
+            }
+        }
+    }
+
+    /** Hentikan pendengar (dan unmute) selama sesi percakapan berlangsung. */
+    private fun pauseRecognizer() {
+        resumeJob?.cancel()
+        resumeJob = null
+        wakeRecognizer?.stop()
+        updateNotification("Dalam sesi percakapan…")
+    }
+
+    /** Mulai lagi pendengar kata kunci (setelah sesi selesai). */
+    private fun resumeRecognizer() {
+        resumeJob?.cancel()
+        resumeJob = null
+        wakeRecognizer?.start(AppPreferences(this).load().wakeWords)
+    }
+
+    /** Fallback: kembali mendengarkan setelah 180 detik bila tidak ada sinyal resume. */
+    private fun scheduleFallbackResume() {
+        resumeJob?.cancel()
+        resumeJob = scope.launch {
+            kotlinx.coroutines.delay(180_000)
+            resumeRecognizer()
+        }
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -64,6 +108,14 @@ class XiaozhiVoiceService : Service() {
         super.onCreate()
         createChannel()
         startForegroundWithType()
+        registerReceiver(
+            controlReceiver,
+            android.content.IntentFilter().apply {
+                addAction(ACTION_PAUSE)
+                addAction(ACTION_RESUME)
+            },
+            android.content.Context.RECEIVER_NOT_EXPORTED,
+        )
         val wakeWords = AppPreferences(this).load().wakeWords
         wakeRecognizer = WakeWordRecognizer(
             context = this,
@@ -76,11 +128,10 @@ class XiaozhiVoiceService : Service() {
                         .putExtra(EXTRA_PHRASE, phrase)
                 )
                 updateNotification("Terdeteksi: $phrase — memulai percakapan…")
-                // Mulai lagi mendengarkan setelah jeda (sesi percakapan ditangani activity)
-                scope.launch {
-                    kotlinx.coroutines.delay(3_000)
-                    wakeRecognizer?.start(AppPreferences(this@XiaozhiVoiceService).load().wakeWords)
-                }
+                // JANGAN restart otomatis di sini: mute akan membungkam TTS.
+                // Pendengar kembali hanya lewat RESUME (dari activity) atau fallback 180 detik.
+                pauseRecognizer()
+                scheduleFallbackResume()
             },
             onStatusChanged = { status -> updateNotification(status) },
             onError = { error -> updateNotification("Error: $error") },
@@ -97,6 +148,8 @@ class XiaozhiVoiceService : Service() {
     }
 
     override fun onDestroy() {
+        runCatching { unregisterReceiver(controlReceiver) }
+        resumeJob?.cancel()
         scope.launch {
             wakeRecognizer?.release()
             wakeRecognizer = null

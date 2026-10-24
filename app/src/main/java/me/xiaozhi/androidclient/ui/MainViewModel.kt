@@ -465,6 +465,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
+        // Jeda pendengar kata kunci selama sesi (agar mute tidak membungkam TTS)
+        me.xiaozhi.androidclient.XiaozhiVoiceService.pauseListening(getApplication())
         interruptCurrentTurn(reason = "listen_start")
         pendingListeningMode = null
 
@@ -514,11 +516,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun stopListening() {
         pendingListeningMode = null
         finishListening(sendStop = true, stopCapture = true, keepTurnActive = true, reason = "Rekaman berhenti")
+        me.xiaozhi.androidclient.XiaozhiVoiceService.resumeListening(getApplication())
     }
 
     fun abortSpeaking() {
         clearPendingConversation()
         finishListening(sendStop = false, stopCapture = true, keepTurnActive = false, reason = "已请求打断")
+        me.xiaozhi.androidclient.XiaozhiVoiceService.resumeListening(getApplication())
         audioEngine.clearPlayback {
             updateState { copy(isAssistantSpeaking = it) }
         }
